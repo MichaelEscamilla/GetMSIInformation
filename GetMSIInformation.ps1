@@ -3,7 +3,6 @@ $Global:currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Secur
 if (($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
   Write-Warning "The script is running as an administrator."
   Write-Warning "Drag and Drog will not work while running as an administrator."
-  
 }
 
 # Load Assemblies
@@ -284,7 +283,6 @@ Add-Type -AssemblyName System.Windows.Forms
 # Create a new XML node reader for reading the XAML content
 $readerformMSIProperties = New-Object System.Xml.XmlNodeReader $XAMLformMSIProperties
 
-	
 # Load the XAML content into a WPF window object using the XAML reader
 [System.Windows.Window]$formMSIProperties = [Windows.Markup.XamlReader]::Load($readerformMSIProperties)
 
