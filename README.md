@@ -14,3 +14,7 @@ Quickly access the app by invoking the URL [msiapp.michaeltheadmin.com](https://
 iex (irm msiapp.michaeltheadmin.com)
 ```
  ![Invoke MSI Application](/Images/Application_Example_Run.png)
+
+## Do Not Run as Admin
+The Drag and Drop events will not work when ran as administrator. Run the script without elevated Priveledges.
+ ![Invoke MSI Application](/Images/Application_Example_RunAsAdmin.png)
