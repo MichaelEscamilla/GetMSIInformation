@@ -15,8 +15,9 @@ Author: Michael Escamilla
 Date: 9-30-2024
 
 Version History:
-1.0.0.0 - Initial release
-2.0.0.0 - 10-4-2024 - Added file hash information, and context menu items for the installation and uninstallation of a Right-Click Option in Windows Explorer. And some other UI improvements.
+1.0.0.0     - Initial release
+2.0.0.0     - 10-4-2024 - Added file hash information, and context menu items for the installation and uninstallation of a Right-Click Option in Windows Explorer. And some other UI improvements.
+2024.10.4.1 - Updated the version numbering, and a sepearator in the context menu.
 #>
 
 param (
@@ -30,7 +31,7 @@ param (
 # Script Name
 $ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$ScriptVersion = "2.0.0.0"
+[System.Version]$ScriptVersion = "2024.10.4.1"
 # Right-Click Menu Name
 $RightClickMenuName = "Get MSI Information"
 
@@ -70,6 +71,7 @@ Add-Type -AssemblyName System.Windows.Forms
                   Header="GitHub - GetMSIInformation"/>
         <MenuItem Name="MenuItem_About"
                   Header="michaeltheadmin.com"/>
+        <Separator/>
         <MenuItem Name="MenuItem_Version"
                   Header="Version 1.0.0"
                   IsEnabled="False"/>
