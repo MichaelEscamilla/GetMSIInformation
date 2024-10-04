@@ -17,14 +17,17 @@ iex (irm msiapp.michaeltheadmin.com)
 
 ## Right-Click Context Menu Option
 Right-Click Context Menu Option to Lauch the app and automatically load the information
+
 ![Right-Click Context Menu](/Images/Application_ContextMenu_OnFile.png)
 
 ### Install the Context Menu Option
 Install the Context Menu Option from the menu bar
+
 ![Install Context Menu](/Images/Application_ContextMenu_Install.png)
 
 ### Uninstall the Context Menu Option
 Uninstall the Context Menu Option from the menu bar
+
 ![Uninstall Context Menu](/Images/Application_ContextMenu_Uninstall.png)
 
 ## Do Not Run as Admin
