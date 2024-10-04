@@ -1,6 +1,5 @@
 # GetMSIInformation
-Drag and Drop Application to view key MSI Information and copy the values to the Clipboard
-
+Drag and Drop Application to view key MSI Information and copy the values to the Clipboard<br>
  ![FirstLoad](/Images/Application_FirstLoad.png)
 
 ## Example after loading an MSI
@@ -21,15 +20,13 @@ Right-Click Context Menu Option to Lauch the app and automatically load the info
 ![Right-Click Context Menu](/Images/Application_ContextMenu_OnFile.png)
 
 ### Install the Context Menu Option
-Install the Context Menu Option from the menu bar
-
+Install the Context Menu Option from the menu bar<br>
 ![Install Context Menu](/Images/Application_ContextMenu_Install.png)
 
 ### Uninstall the Context Menu Option
-Uninstall the Context Menu Option from the menu bar
-
+Uninstall the Context Menu Option from the menu bar<br>
 ![Uninstall Context Menu](/Images/Application_ContextMenu_Uninstall.png)
 
 ## Do Not Run as Admin
-The Drag and Drop events will not work when ran as administrator. Run the script without elevated Priveledges.
+The Drag and Drop events will not work when ran as administrator. Run the script without elevated Priveledges.<br>
  ![Invoke MSI Application](/Images/Application_Example_RunAsAdmin.png)
