@@ -36,3 +36,9 @@ Easily view all the properties of the MSI Database<br>
 ## Do Not Run as Admin
 The Drag and Drop events will not work when ran as administrator. Run the script without elevated Priveledges.<br>
  ![Invoke MSI Application](/Images/Application_Example_RunAsAdmin.png)
+
+ # Credit
+Got the inspiration from [Andrew Jimenez](https://github.com/asjimene) GetMSIInfo<br>
+ https://github.com/asjimene/GetMSIInfo
+
+ 
