@@ -18,6 +18,7 @@ Version History:
 1.0.0.0     - Initial release
 2.0.0.0     - 10-4-2024 - Added file hash information, and context menu items for the installation and uninstallation of a Right-Click Option in Windows Explorer. And some other UI improvements.
 2024.10.4.1 - Updated the version numbering, and a sepearator in the context menu.
+2024-10.13.0- Added an error message when the file is locked
 #>
 
 param (
@@ -29,18 +30,180 @@ param (
 ################# Variables #################
 #############################################
 # Script Name
-$ScriptName = "GetMSIInformation.ps1"
+$Global:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$ScriptVersion = "2024.10.4.1"
+[System.Version]$Global:ScriptVersion = "2024.10.13.0"
 # Right-Click Menu Name
-$RightClickMenuName = "Get MSI Information"
-
-# Check if the script is running as administrator
+$Global:RightClickMenuName = "Get MSI Information"
+# Get the Security Principal
 $Global:currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-if (($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
-  Write-Warning "The script is running as an administrator."
-  Write-Warning "Drag and Drog will not work while running as an administrator."
+
+#############################################
+################# Functions #################
+#############################################
+#region Functions
+function Test-FileLock {
+  param (
+    [Parameter(Mandatory = $true)]
+    [string]$Path
+  )
+
+  try {
+    $FileStream = [System.IO.File]::Open("$($Path)", 'Open', 'Write')
+    $FileStream.Close()
+    $FileStream.Dispose()
+    return $false
+  }
+  catch {
+    return $true
+  }
 }
+
+function Get-MsiProperties {
+  param (
+    [Parameter(Mandatory = $true)]
+    [IO.FileInfo[]]$Path
+  )
+	
+  # Check if the MSI file path exists
+  if (-not (Test-Path $Path)) {
+    throw "The file $Path does not exist."
+  }
+	
+  # Create a new Windows Installer COM object
+  $WindowsInstaller = New-Object -ComObject WindowsInstaller.Installer
+	
+  # Open the MSI database in read-only mode
+  $MSIDatabase = $WindowsInstaller.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $WindowsInstaller, @($Path.FullName, 0))
+	
+  # Open a view on the Property table
+  $MSIPropertyView = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT * FROM Property"))
+	
+  # Execute the view query
+  $MSIPropertyView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $MSIPropertyView, $null)
+	
+  # Fetch the first record from the result set
+  $MSIRecord = $MSIPropertyView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $MSIPropertyView, $null)
+	
+  # Initialize an empty System Object to store properties
+  [System.Object]$Properties = @{}
+	
+  # Loop through all records in the result set
+  while ($null -ne $MSIRecord) {
+    # Get the property name from the first column
+    $property = $MSIRecord.GetType().InvokeMember("StringData", "GetProperty", $null, $MSIRecord, @(1))
+			
+    # Get the property value from the second column
+    $Value = $MSIRecord.GetType().InvokeMember("StringData", "GetProperty", $null, $MSIRecord, @(2))
+			
+    # Add the property name and value to the hashtable
+    $Properties[$Property] = $Value
+			
+    # Fetch the next record from the result set
+    $MSIRecord = $MSIPropertyView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $MSIPropertyView, $null)
+  }
+	
+  # Return the System Object of properties
+  $Properties
+}
+
+function Enable-AllButtons {
+  # Get all button variables
+  $Buttons = Get-Variable -Name "btn_*" -ValueOnly -ErrorAction SilentlyContinue
+  foreach ($Button in $Buttons) {
+    # Enable Button
+    $Button.IsEnabled = $true
+  }
+}
+
+function Disable-AllButtons {
+  # Get all button variables
+  $Buttons = Get-Variable -Name "btn_*" -ValueOnly -ErrorAction SilentlyContinue
+  foreach ($Button in $Buttons) {
+    # Disable Button
+    $Button.IsEnabled = $false
+  }
+}
+
+function Clear-Textboxes {
+  # Get all textbox variables
+  $Textboxes = Get-Variable -Name "txt_*" -ValueOnly -ErrorAction SilentlyContinue
+  foreach ($Textbox in $Textboxes) {
+    # Disable Button
+    $Textbox.Clear()
+  }
+}
+
+# Stolen from: https://github.com/PatchMyPCTeam/CustomerTroubleshooting/blob/Release/PowerShell/Get-LocalContentHashes.ps1
+Function Get-EncodedHash {
+  [CmdletBinding()]
+  Param(
+    [Parameter(Position = 0)]
+    [System.Object]$HashValue
+  )
+
+  $hashBytes = $hashValue.Hash -split '(?<=\G..)(?=.)' | ForEach-Object { [byte]::Parse($_, 'HexNumber') }
+  Return [Convert]::ToBase64String($hashBytes)
+}
+
+function Get-FileHashInformation {
+  param (
+    [Parameter(Mandatory = $true)]
+    [IO.FileInfo[]]$Path
+
+  )
+
+  Write-Host "Getting File Hash Information for: [$Path]"
+
+  # Initialize the hash object
+  $Hashes = @{}
+
+  # Get File Hash - MD5
+  $FileHashMD5 = Get-FileHash -Path $Path -Algorithm MD5
+  $Hashes["MD5"] = $FileHashMD5
+
+  # Get File Hash - SHA1
+  $FileHashSHA1 = Get-FileHash -Path $Path -Algorithm SHA1
+  $Hashes["SHA1"] = $FileHashSHA1
+
+  # Get File Hash - SHA256
+  $FileHashSHA256 = Get-FileHash -Path $Path -Algorithm SHA256
+  $Hashes["SHA256"] = $FileHashSHA256
+
+  # Get File Hash - SHA1 - Encoded
+  $FileHashEncoded = Get-EncodedHash -HashValue $FileHashSHA1
+  $Hashes["Digest"] = $FileHashEncoded
+
+  # Return the hash object
+  $Hashes
+}
+
+function Set-TextboxInformation {
+  param (
+    [Parameter(Mandatory = $true)]
+    [System.Object]$MSIPropertiesInfo,
+    [Parameter(Mandatory = $true)]
+    [hashtable]$FileHashInfo
+  )
+
+  # Set the MSI file properties textboxes
+  $txt_ProductName.Text = $MSIPropertiesInfo.ProductName
+  $txt_Manufacture.Text = $MSIPropertiesInfo.Manufacturer
+  $txt_ProductVersion.Text = $MSIPropertiesInfo.ProductVersion
+  $txt_ProductCode.Text = $MSIPropertiesInfo.ProductCode
+  $txt_UpgradeCode.Text = $MSIPropertiesInfo.UpgradeCode
+
+  # Set the File Hash Information textboxes
+  $txt_MD5.Text = $FileHashInfo.MD5.Hash
+  $txt_SHA1.Text = $FileHashInfo.SHA1.Hash
+  $txt_SHA256.Text = $FileHashInfo.SHA256.Hash
+  $txt_Digest.Text = $FileHashInfo.Digest
+}
+#endregion Functions
+
+#############################################
+################# Main Script ################
+#############################################
 
 # Load Assemblies
 Add-Type -AssemblyName PresentationFramework
@@ -376,152 +539,6 @@ $readerformMSIProperties = New-Object System.Xml.XmlNodeReader $XAMLformMSIPrope
 $XAMLformMSIProperties.SelectNodes("//*[@Name]") | ForEach-Object { Set-Variable -Name ($_.Name) -Value $formMSIProperties.FindName($_.Name) -Scope Global }
 
 #############################################
-################# Functions #################
-#############################################
-#region Functions
-function Get-MsiProperties {
-  param (
-    [Parameter(Mandatory = $true)]
-    [IO.FileInfo[]]$Path
-  )
-	
-  # Check if the MSI file path exists
-  if (-not (Test-Path $Path)) {
-    throw "The file $Path does not exist."
-  }
-	
-  # Create a new Windows Installer COM object
-  $WindowsInstaller = New-Object -ComObject WindowsInstaller.Installer
-	
-  # Open the MSI database in read-only mode
-  $MSIDatabase = $WindowsInstaller.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $WindowsInstaller, @($Path.FullName, 0))
-	
-  # Open a view on the Property table
-  $MSIPropertyView = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT * FROM Property"))
-	
-  # Execute the view query
-  $MSIPropertyView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $MSIPropertyView, $null)
-	
-  # Fetch the first record from the result set
-  $MSIRecord = $MSIPropertyView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $MSIPropertyView, $null)
-	
-  # Initialize an empty System Object to store properties
-  [System.Object]$Properties = @{}
-	
-  # Loop through all records in the result set
-  while ($null -ne $MSIRecord) {
-    # Get the property name from the first column
-    $property = $MSIRecord.GetType().InvokeMember("StringData", "GetProperty", $null, $MSIRecord, @(1))
-			
-    # Get the property value from the second column
-    $Value = $MSIRecord.GetType().InvokeMember("StringData", "GetProperty", $null, $MSIRecord, @(2))
-			
-    # Add the property name and value to the hashtable
-    $Properties[$Property] = $Value
-			
-    # Fetch the next record from the result set
-    $MSIRecord = $MSIPropertyView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $MSIPropertyView, $null)
-  }
-	
-  # Return the System Object of properties
-  $Properties
-}
-
-function Enable-AllButtons {
-  # Get all button variables
-  $Buttons = Get-Variable -Name "btn_*" -ValueOnly -ErrorAction SilentlyContinue
-  foreach ($Button in $Buttons) {
-    # Enable Button
-    $Button.IsEnabled = $true
-  }
-}
-
-function Disable-AllButtons {
-  # Get all button variables
-  $Buttons = Get-Variable -Name "btn_*" -ValueOnly -ErrorAction SilentlyContinue
-  foreach ($Button in $Buttons) {
-    # Disable Button
-    $Button.IsEnabled = $false
-  }
-}
-
-function Clear-Textboxes {
-  # Get all textbox variables
-  $Textboxes = Get-Variable -Name "txt_*" -ValueOnly -ErrorAction SilentlyContinue
-  foreach ($Textbox in $Textboxes) {
-    # Disable Button
-    $Textbox.Clear()
-  }
-}
-
-# Stolen from: https://github.com/PatchMyPCTeam/CustomerTroubleshooting/blob/Release/PowerShell/Get-LocalContentHashes.ps1
-Function Get-EncodedHash {
-  [CmdletBinding()]
-  Param(
-    [Parameter(Position = 0)]
-    [System.Object]$HashValue
-  )
-
-  $hashBytes = $hashValue.Hash -split '(?<=\G..)(?=.)' | ForEach-Object { [byte]::Parse($_, 'HexNumber') }
-  Return [Convert]::ToBase64String($hashBytes)
-}
-
-function Get-FileHashInformation {
-  param (
-    [Parameter(Mandatory = $true)]
-    [IO.FileInfo[]]$Path
-
-  )
-
-  Write-Host "Getting File Hash Information for: [$Path]"
-
-  # Initialize the hash object
-  $Hashes = @{}
-
-  # Get File Hash - MD5
-  $FileHashMD5 = Get-FileHash -Path $Path -Algorithm MD5
-  $Hashes["MD5"] = $FileHashMD5
-
-  # Get File Hash - SHA1
-  $FileHashSHA1 = Get-FileHash -Path $Path -Algorithm SHA1
-  $Hashes["SHA1"] = $FileHashSHA1
-
-  # Get File Hash - SHA256
-  $FileHashSHA256 = Get-FileHash -Path $Path -Algorithm SHA256
-  $Hashes["SHA256"] = $FileHashSHA256
-
-  # Get File Hash - SHA1 - Encoded
-  $FileHashEncoded = Get-EncodedHash -HashValue $FileHashSHA1
-  $Hashes["Digest"] = $FileHashEncoded
-
-  # Return the hash object
-  $Hashes
-}
-
-function Set-TextboxInformation {
-  param (
-    [Parameter(Mandatory = $true)]
-    [System.Object]$MSIPropertiesInfo,
-    [Parameter(Mandatory = $true)]
-    [hashtable]$FileHashInfo
-  )
-
-  # Set the MSI file properties textboxes
-  $txt_ProductName.Text = $MSIPropertiesInfo.ProductName
-  $txt_Manufacture.Text = $MSIPropertiesInfo.Manufacturer
-  $txt_ProductVersion.Text = $MSIPropertiesInfo.ProductVersion
-  $txt_ProductCode.Text = $MSIPropertiesInfo.ProductCode
-  $txt_UpgradeCode.Text = $MSIPropertiesInfo.UpgradeCode
-
-  # Set the File Hash Information textboxes
-  $txt_MD5.Text = $FileHashInfo.MD5.Hash
-  $txt_SHA1.Text = $FileHashInfo.SHA1.Hash
-  $txt_SHA256.Text = $FileHashInfo.SHA256.Hash
-  $txt_Digest.Text = $FileHashInfo.Digest
-}
-#endregion Functions
-
-#############################################
 ############## Event Handlers ###############
 #############################################
 #region Event Handlers
@@ -530,6 +547,10 @@ function Set-TextboxInformation {
 $formMSIProperties.Add_Loaded({
     # Check if the script is running as an administrator
     if (($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
+
+      Write-Warning "The script is running as an administrator."
+      Write-Warning "Drag and Drog will not work while running as an administrator."
+
       # Clear the listbox
       $lsbox_FilePath.Items.Clear()
 
@@ -547,43 +568,88 @@ $formMSIProperties.Add_Loaded({
 
     # Check if the FilePath parameter is provided to script
     if ($FilePath) {
-      # Get the MSI file properties
-      $FileMSIInfo = Get-MsiProperties -Path $FilePath
+      # Check if $FilePath is locked
+      if (Test-FileLock -Path $FilePath) {
+        Write-Warning "The file is locked: [$FilePath]"
 
-      # Get the File Hash Information
-      $HashInfo = Get-FileHashInformation -Path $FilePath
+        # Clear the listbox
+        $lsbox_FilePath.Items.Clear()
 
-      # Populate the textboxes
-      Set-TextboxInformation -MSIPropertiesInfo $FileMSIInfo -FileHashInfo $HashInfo
+        # Add an error message to the listbox
+        $lsbox_FilePath.Items.Add("ERROR: The file is locked:`n[$FilePath]")
+        
+        # Make the Error message bold, red and yellow
+        $lsbox_FilePath.Background = [System.Windows.Media.Brushes]::Red
+        $lsbox_FilePath.Foreground = [System.Windows.Media.Brushes]::Yellow
+        $lsbox_FilePath.FontWeight = 'Bold'
+        $lsbox_FilePath.FontSize = 16
+      }
+      else {
+        # Get the MSI file properties
+        $FileMSIInfo = Get-MsiProperties -Path $FilePath
 
-      # Enable the Copy buttons
-      Enable-AllButtons
+        # Get the File Hash Information
+        $HashInfo = Get-FileHashInformation -Path $FilePath
 
-      # Clear the listbox and add the filename
-      $lsbox_FilePath.Items.Clear()
-      $lsbox_FilePath.Items.Add($FilePath)
+        # Populate the textboxes
+        Set-TextboxInformation -MSIPropertiesInfo $FileMSIInfo -FileHashInfo $HashInfo
+
+        # Enable the Copy buttons
+        Enable-AllButtons
+
+        # Clear the listbox and add the filename
+        $lsbox_FilePath.Items.Clear()
+        $lsbox_FilePath.Items.Add($FilePath)
+      }
     }
   })
 
 #### Listbox Drag and Drop ####
 $lsbox_FilePath.Add_Drop({
     $filename = $_.Data.GetData([Windows.Forms.DataFormats]::FileDrop)
+    Write-Host "File Dropped: [$filename]"
     if ($filename) {
-      # Get the MSI file properties
-      $FileMSIInfo = Get-MsiProperties -Path $filename
+      # Check if $FilePath is locked
+      if (Test-FileLock -Path "$($filename)") {
+        Write-Warning "The file is locked: [$filename]"
+  
+        # Clear the listbox
+        $lsbox_FilePath.Items.Clear()
+  
+        # Add an error message to the listbox
+        $lsbox_FilePath.Items.Add("ERROR: The file is locked:`n[$filename]")
+          
+        # Make the Error message bold, red and yellow
+        $lsbox_FilePath.Background = [System.Windows.Media.Brushes]::Red
+        $lsbox_FilePath.Foreground = [System.Windows.Media.Brushes]::Yellow
+        $lsbox_FilePath.FontWeight = 'Bold'
+        $lsbox_FilePath.FontSize = 16
+      }
+      else {
+        # Get the MSI file properties
+        $FileMSIInfo = Get-MsiProperties -Path $filename
 
-      # Get the File Hash Information
-      $HashInfo = Get-FileHashInformation -Path $filename
+        # Get the File Hash Information
+        $HashInfo = Get-FileHashInformation -Path $filename
 
-      # Populate the textboxes
-      Set-TextboxInformation -MSIPropertiesInfo $FileMSIInfo -FileHashInfo $HashInfo
+        # Populate the textboxes
+        Set-TextboxInformation -MSIPropertiesInfo $FileMSIInfo -FileHashInfo $HashInfo
 
-      # Enable the Copy buttons
-      Enable-AllButtons
+        # Enable the Copy buttons
+        Enable-AllButtons
 
-      # Clear the listbox and add the filename
-      $lsbox_FilePath.Items.Clear()
-      $lsbox_FilePath.Items.Add($filename[0])
+        # Clear the listbox
+        $lsbox_FilePath.Items.Clear()
+
+        # Reset the listbox font style
+        $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::BackgroundProperty)
+        $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::ForegroundProperty)
+        $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::FontWeightProperty)
+        $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::FontSizeProperty)
+
+        # Add the filename to the listbox
+        $lsbox_FilePath.Items.Add($filename[0])
+      }
     }
   })
 
