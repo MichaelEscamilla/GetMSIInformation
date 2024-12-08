@@ -1,3 +1,40 @@
+<#PSScriptInfo
+
+.VERSION 2024.12.8.0
+
+.GUID f711f1e2-f8c2-412b-97a5-60a2cf6f1510
+
+.AUTHOR Michael Escamilla
+
+.COMPANYNAME
+
+.COPYRIGHT
+
+.TAGS
+
+.LICENSEURI
+
+.PROJECTURI https://github.com/MichaelEscamilla/GetMSIInformation
+
+.ICONURI
+
+.EXTERNALMODULEDEPENDENCIES 
+
+.REQUIREDSCRIPTS
+
+.EXTERNALSCRIPTDEPENDENCIES
+
+.RELEASENOTES
+1.0.0.0       - Initial release
+2.0.0.0       - 10-4-2024 - Added file hash information, and context menu items for the installation and uninstallation of a Right-Click Option in Windows Explorer. And some other UI improvements.
+2024.10.4.1   - Updated the version numbering, and a sepearator in the context menu.
+2024-10.13.0  - Added an error message when the file is locked
+2024-12.8.0   - Formatted Script for Publishing to PowerShell Gallery
+
+.PRIVATEDATA
+
+#> 
+
 <#
 .SYNOPSIS
 This script provides a graphical user interface (GUI) for viewing and copying properties of MSI files.
@@ -11,14 +48,7 @@ Additionally, the script includes options to install and uninstall a context men
 Optional parameter to specify the path of the MSI file to automatically load the information for.
 
 .NOTES
-Author: Michael Escamilla
-Date: 9-30-2024
 
-Version History:
-1.0.0.0     - Initial release
-2.0.0.0     - 10-4-2024 - Added file hash information, and context menu items for the installation and uninstallation of a Right-Click Option in Windows Explorer. And some other UI improvements.
-2024.10.4.1 - Updated the version numbering, and a sepearator in the context menu.
-2024-10.13.0- Added an error message when the file is locked
 #>
 
 param (
@@ -32,7 +62,7 @@ param (
 # Script Name
 $Global:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Global:ScriptVersion = "2024.10.13.0"
+[System.Version]$Global:ScriptVersion = "2024.12.8.0"
 # Right-Click Menu Name
 $Global:RightClickMenuName = "Get MSI Information"
 # Get the Security Principal
