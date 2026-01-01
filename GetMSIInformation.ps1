@@ -62,7 +62,7 @@ param (
 # Script Name
 $Global:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Global:ScriptVersion = "2024.12.8.0"
+[System.Version]$Global:ScriptVersion = "2025.12.31.0"
 # Right-Click Menu Name
 $Global:RightClickMenuName = "Get MSI Information"
 # Get the Security Principal
@@ -114,7 +114,7 @@ function Get-MsiProperties {
 	
   # Fetch the first record from the result set
   $MSIRecord = $MSIPropertyView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $MSIPropertyView, $null)
-	
+
   # Initialize an empty System Object to store properties
   [System.Object]$Properties = @{}
 	
@@ -138,11 +138,19 @@ function Get-MsiProperties {
 }
 
 function Enable-AllButtons {
+  param (
+    [Parameter(Mandatory = $false)]
+    [string]$Exclude
+  )
+
   # Get all button variables
   $Buttons = Get-Variable -Name "btn_*" -ValueOnly -ErrorAction SilentlyContinue
   foreach ($Button in $Buttons) {
-    # Enable Button
-    $Button.IsEnabled = $true
+    # Check that the button name does not contain the exclude variable
+    if ($Button.Name -notlike "*$Exclude*") {
+      # Enable Button
+      $Button.IsEnabled = $true
+    }
   }
 }
 
@@ -159,9 +167,11 @@ function Clear-Textboxes {
   # Get all textbox variables
   $Textboxes = Get-Variable -Name "txt_*" -ValueOnly -ErrorAction SilentlyContinue
   foreach ($Textbox in $Textboxes) {
-    # Disable Button
+    # Clear textbox
     $Textbox.Clear()
   }
+  # Clear the icon image
+  Clear-IconImage
 }
 
 # Stolen from: https://github.com/PatchMyPCTeam/CustomerTroubleshooting/blob/Release/PowerShell/Get-LocalContentHashes.ps1
@@ -208,6 +218,97 @@ function Get-FileHashInformation {
   $Hashes
 }
 
+function Get-MsiIcon {
+  param (
+    [Parameter(Mandatory = $true)]
+    [IO.FileInfo[]]$Path,
+    [Parameter(Mandatory = $false)]
+    [string]$ExportFolder = "$env:TEMP\GetMSIInformation"
+  )
+
+  
+  # Ensure the export folder exists
+  if (-not (Test-Path -Path $ExportFolder)) {
+    New-Item -ItemType Directory -Path $ExportFolder -Force | Out-Null
+  }
+
+  # Create a new Windows Installer COM object
+  $WindowsInstaller = New-Object -ComObject WindowsInstaller.Installer
+    
+  # Open the MSI database in read-only mode
+  $MSIDatabase = $WindowsInstaller.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $WindowsInstaller, @($Path.FullName, 0))
+
+  # Open a view on the Property table to get ARPPRODUCTICON property
+  $PropertyView = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Value FROM Property WHERE Property='ARPPRODUCTICON'"))
+
+  # Execute the view query
+  $PropertyView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $PropertyView, $null) | Out-Null
+
+  # Fetch the first record from the result set
+  $PropertyIconRecord = $PropertyView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $PropertyView, $null)
+
+  if (-not $PropertyIconRecord) {
+    throw "No ARPPRODUCTICON property found in MSI."
+  }
+  $ARPPRODUCTICONName = $PropertyIconRecord.StringData(1)
+
+  # Close the Property view
+  $PropertyView.GetType().InvokeMember("Close", "InvokeMethod", $null, $PropertyView, $null) | Out-Null
+
+  # Open a view on the Icon table to get the icon binary data
+  $IconView = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Name FROM _Tables WHERE Name='Icon'"))
+
+  # Execute the view query
+  $IconView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $IconView, $null) | Out-Null
+
+  # Fetch Record
+  $IconTable = $IconView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $IconView, $null)
+
+  # Close the Icon view
+  $IconView.GetType().InvokeMember("Close", "InvokeMethod", $null, $IconView, $null) | Out-Null
+  
+  if ($IconTable) {
+    # Get Icon Record based on ARPPRODUCTICON property
+    $IconData = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Name,Data FROM Icon WHERE Name='$ARPPRODUCTICONName'"))
+
+    # Execute the view query
+    $IconData.GetType().InvokeMember("Execute", "InvokeMethod", $null, $IconData, $null) | Out-Null
+
+    # Fetch Record
+    $IconRecord = $IconData.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $IconData, $null)
+
+    if ($IconRecord) {
+      # Get the 'Name' Field
+      $IconDataName = $IconData.GetType().InvokeMember("StringData", 'Public, Instance, GetProperty', $null, $IconRecord, 1)
+
+      # Get the DataSize of the Binary Data
+      $IconDataSize = $IconData.GetType().InvokeMember("DataSize", "GetProperty", $null, $IconRecord, 2)
+
+      # Read the Binary Data
+      $IconBinaryData = $IconData.GetType().InvokeMember("ReadStream", "InvokeMethod", $null, $IconRecord, @(2, $IconDataSize, 2))
+
+      # Get Binary data as ANSI string - use Windows-1252 encoding
+      $ByteArray = [System.Text.Encoding]::GetEncoding(1252).GetBytes($IconBinaryData)
+
+      # Construct the path to save the ICO file
+      $IconPathTemp = Join-Path -Path $ExportFolder -ChildPath "$($IconDataName).ico"
+
+      # Check if the file already exists and delete it if necessary
+      if (Test-Path -Path $IconPathTemp) {
+        Remove-Item -Path $IconPathTemp -Force
+      }
+
+      # Write the byte array to an ICO file
+      [System.IO.File]::WriteAllBytes($IconPathTemp, $ByteArray)
+    }
+
+    # Close the IconData view
+    $IconData.GetType().InvokeMember("Close", "InvokeMethod", $null, $IconData, $null) | Out-Null
+  }
+  
+  Return $IconPathTemp
+}
+
 function Set-TextboxInformation {
   param (
     [Parameter(Mandatory = $true)]
@@ -228,6 +329,83 @@ function Set-TextboxInformation {
   $txt_SHA1.Text = $FileHashInfo.SHA1.Hash
   $txt_SHA256.Text = $FileHashInfo.SHA256.Hash
   $txt_Digest.Text = $FileHashInfo.Digest
+}
+
+function Set-IconImage {
+  param (
+    [Parameter(Mandatory = $true)]
+    [string]$IconPath
+  )
+
+  Write-Host "Setting icon image from path: [$IconPath]"
+  # Trim any leading or trailing whitespace from the icon path
+  $IconPath = $IconPath.Trim()
+  Write-Host "Setting icon image from path: [$IconPath]"
+
+  try {
+    if ($IconPath -and (Test-Path $IconPath)) {
+      # Create BitmapImage from the icon file
+      $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
+      $bitmap.BeginInit()
+      $bitmap.UriSource = New-Object System.Uri($IconPath)
+      $bitmap.CacheOption = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
+      $bitmap.EndInit()
+      $bitmap.Freeze()
+      
+      # Set the image source
+      $img_Icon.Source = $bitmap
+      $img_Icon.Visibility = "Visible"
+      $lbl_NoIcon.Visibility = "Collapsed"
+    }
+    else {
+      # No icon available
+      $img_Icon.Visibility = "Collapsed"
+      $lbl_NoIcon.Visibility = "Visible"
+    }
+  }
+  catch {
+    Write-Warning "Failed to display icon: $_"
+    $img_Icon.Visibility = "Collapsed"
+    $lbl_NoIcon.Visibility = "Visible"
+  }
+}
+
+function Clear-IconImage {
+  $img_Icon.Source = $null
+  $img_Icon.Visibility = "Collapsed"
+  $lbl_NoIcon.Visibility = "Collapsed"
+}
+
+function Invoke-GetMSIInformation {
+  param (
+    [Parameter(Mandatory = $true)]
+    [IO.FileInfo[]]$MSIPath
+  )
+
+  # Get the MSI file properties
+  $FileMSIInfo = Get-MsiProperties -Path $MSIPath
+
+  # Get the File Hash Information
+  $HashInfo = Get-FileHashInformation -Path $MSIPath
+
+  # Populate the textboxes
+  Set-TextboxInformation -MSIPropertiesInfo $FileMSIInfo -FileHashInfo $HashInfo
+
+  # Extract and display the icon
+  Set-IconImage -IconPath "$(Get-MsiIcon -Path $MSIPath)"
+
+  # Enable the Copy buttons
+  Enable-AllButtons -Exclude "IconExport"
+      
+  # Reset the listbox font style
+  #$lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::BackgroundProperty)
+  #$lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::ForegroundProperty)
+  #$lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::FontWeightProperty)
+  #$lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::FontSizeProperty)
+
+  # Clear the listbox and add the filename
+  $lsbox_FilePath.Items.Clear()
+  $lsbox_FilePath.Items.Add($MSIPath[0])
 }
 #endregion Functions
 
@@ -273,158 +451,236 @@ Add-Type -AssemblyName System.Windows.Forms
 
     <Grid>
       <Grid.RowDefinitions>
-        <RowDefinition Height="32"/>
-        <RowDefinition Height="32"/>
-        <RowDefinition Height="32"/>
-        <RowDefinition Height="32"/>
-        <RowDefinition Height="5"/>
-        <RowDefinition Height="32"/>
-        <RowDefinition Height="32"/>
-        <RowDefinition Height="32"/>
-        <RowDefinition Height="32"/>
-        <RowDefinition Height="32"/>
-        <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="5" />
+        <RowDefinition Height="*" />
       </Grid.RowDefinitions>
       <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="100"/>
         <ColumnDefinition Width="Auto"/>
         <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="0.15*"/>
       </Grid.ColumnDefinitions>
-      <Grid.Resources>
-        <Style TargetType="Label">
-          <Setter Property="Margin"
-                  Value="2.5"/>
-          <Setter Property="HorizontalAlignment"
-                  Value="Stretch"/>
-          <Setter Property="HorizontalContentAlignment"
-                  Value="Right"/>
-          <Setter Property="VerticalAlignment"
-                  Value="Stretch"/>
-          <Setter Property="VerticalContentAlignment"
-                  Value="Center"/>
-          <Setter Property="IsEnabled"
-                  Value="True"/>
-        </Style>
-        <Style TargetType="TextBox">
-          <Setter Property="Margin"
-                  Value="2.5"/>
-          <Setter Property="Width"
-                  Value="Auto"/>
-          <Setter Property="HorizontalAlignment"
-                  Value="Stretch"/>
-          <Setter Property="VerticalAlignment"
-                  Value="Stretch"/>
-          <Setter Property="VerticalContentAlignment"
-                  Value="Center"/>
-          <Setter Property="IsEnabled"
-                  Value="True"/>
-          <Setter Property="IsReadOnly"
-                  Value="True"/>
-        </Style>
-        <Style TargetType="Button">
-          <Setter Property="Margin"
-                  Value="2.5"/>
-          <Setter Property="Width"
-                  Value="Auto"/>
-          <Setter Property="HorizontalAlignment"
-                  Value="Stretch"/>
-          <Setter Property="VerticalAlignment"
-                  Value="Stretch"/>
-          <Setter Property="VerticalContentAlignment"
-                  Value="Center"/>
-          <Setter Property="IsEnabled"
-                  Value="False"/>
-        </Style>
-        <Style TargetType="ListBoxItem">
-          <Setter Property="HorizontalAlignment"
-                  Value="Stretch"/>
-          <Setter Property="HorizontalContentAlignment"
-                  Value="Center"/>
-          <Setter Property="VerticalAlignment"
-                  Value="Stretch"/>
-          <Setter Property="VerticalContentAlignment"
-                  Value="Center"/>
-          <Setter Property="Height"
-                  Value="{Binding ElementName=lsbox_FilePath, Path=ActualHeight}"/>
-        </Style>
-      </Grid.Resources>
 
-      <!-- Row 0 -->
-      <!-- MD5 -->
-      <Label
+      <Grid
         Grid.Row="0"
-        Grid.Column="0"
-        Name="lbl_MD5"
-        Content="MD5"/>
-      <TextBox
-        Grid.Row="0"
-        Grid.Column="1"
-        Name="txt_MD5"
-        xml:space="preserve"/>
-      <Button
-        Grid.Row="0"
-        Grid.Column="2"
-        Name="btn_MD5_Copy"
-        Content="Copy"/>
+        Grid.Column="0">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="100"/>
+          <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.Resources>
+          <Style TargetType="Button">
+            <Setter Property="Margin"
+                    Value="5,2.5,2.5,2.5"/>
+            <Setter Property="Width"
+                    Value="Auto"/>
+            <Setter Property="HorizontalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="IsEnabled"
+                    Value="False"/>
+          </Style>
+          <Style TargetType="Border">
+            <Setter Property="Margin"
+                    Value="5,2.5,2.5,2.5"/>
+          </Style>
+        </Grid.Resources>
+        
+        <Border
+          Grid.Row="0"
+          BorderBrush="Black"
+          BorderThickness="1"
+          Background="WhiteSmoke">
+          <Grid>
+            <Image
+              Grid.Row="0"
+              Name="img_Icon"
+              Width="64"
+              Height="64"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center"
+              Visibility="Collapsed"/>
+            <Label
+              Grid.Row="0"
+              Name="lbl_NoIcon"
+              Content="No Icon"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center"
+              FontStyle="Italic"
+              Foreground="Gray"
+              Visibility="Visible"/>
+          </Grid>
+        </Border>
+        <Button
+          Grid.Row="1"
+          Name="btn_IconExport"
+          Content="Export Icon"
+          IsEnabled="False"/>
+      </Grid>
 
-      <!-- Row 1 -->
-      <!-- Row SHA1 -->
-      <Label
-        Grid.Row="1"
-        Grid.Column="0"
-        Name="lbl_SHA1"
-        Content="SHA1"/>
-      <TextBox
-        Grid.Row="1"
-        Grid.Column="1"
-        Name="txt_SHA1"
-        xml:space="preserve"/>
-      <Button
-        Grid.Row="1"
-        Grid.Column="2"
-        Name="btn_SHA1_Copy"
-        Content="Copy"/>
-
-      <!-- Row 2 -->
-      <!-- Row SHA256 -->
-      <Label
-        Grid.Row="2"
-        Grid.Column="0"
-        Name="lbl_SHA256"
-        Content="SHA256"/>
-      <TextBox
-        Grid.Row="2"
-        Grid.Column="1"
-        Name="txt_SHA256"
-        xml:space="preserve"/>
-      <Button
-        Grid.Row="2"
-        Grid.Column="2"
-        Name="btn_SHA256_Copy"
-        Content="Copy"/>
-
-      <!-- Row 3 -->
-      <!-- Digest -->
-      <Label
-        Grid.Row="3"
-        Grid.Column="0"
-        Name="lbl_Digest"
-        Content="Digest"/>
-      <TextBox
-        Grid.Row="3"
-        Grid.Column="1"
-        Name="txt_Digest"
-        xml:space="preserve"/>
-      <Button
-        Grid.Row="3"
-        Grid.Column="2"
-        Name="btn_Digest_Copy"
-        Content="Copy"/>
-
-      <!-- Row Gridline -->
-      <!-- Row 4 -->
       <Line
-        Grid.Row="4"
+        Grid.Row="0"
+        Grid.Column="1"
+        Margin="2.5,0,0,0"
+        X1="0"
+        Y1="1"
+        X2="0"
+        Y2="0"
+        Stroke="Black"
+        StrokeThickness="2.5"
+        Stretch="Uniform"/>
+
+      <Grid
+        Grid.Row="0"
+        Grid.Column="2">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="32"/>
+          <RowDefinition Height="32"/>
+          <RowDefinition Height="32"/>
+          <RowDefinition Height="32"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="75"/>
+        </Grid.ColumnDefinitions>
+        <Grid.Resources>
+          <Style TargetType="Label">
+            <Setter Property="Margin"
+                    Value="2.5"/>
+            <Setter Property="HorizontalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="VerticalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="IsEnabled"
+                    Value="True"/>
+          </Style>
+          <Style TargetType="TextBox">
+            <Setter Property="Margin"
+                    Value="2.5"/>
+            <Setter Property="Width"
+                    Value="Auto"/>
+            <Setter Property="HorizontalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="IsEnabled"
+                    Value="True"/>
+            <Setter Property="IsReadOnly"
+                    Value="True"/>
+          </Style>
+          <Style TargetType="Button">
+            <Setter Property="Margin"
+                    Value="2.5"/>
+            <Setter Property="Width"
+                    Value="Auto"/>
+            <Setter Property="HorizontalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="IsEnabled"
+                    Value="False"/>
+          </Style>
+          <Style TargetType="ListBoxItem">
+            <Setter Property="HorizontalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="VerticalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="Height"
+                    Value="{Binding ElementName=lsbox_FilePath, Path=ActualHeight}"/>
+          </Style>
+        </Grid.Resources>
+
+        <!-- Row 0 -->
+        <!-- MD5 -->
+        <Label
+          Grid.Row="0"
+          Grid.Column="0"
+          Name="lbl_MD5"
+          Content="MD5"/>
+        <TextBox
+          Grid.Row="0"
+          Grid.Column="1"
+          Name="txt_MD5"
+          xml:space="preserve"/>
+        <Button
+          Grid.Row="0"
+          Grid.Column="2"
+          Name="btn_MD5_Copy"
+          Content="Copy"/>
+
+        <!-- Row 1 -->
+        <!-- Row SHA1 -->
+        <Label
+          Grid.Row="1"
+          Grid.Column="0"
+          Name="lbl_SHA1"
+          Content="SHA1"/>
+        <TextBox
+          Grid.Row="1"
+          Grid.Column="1"
+          Name="txt_SHA1"
+          xml:space="preserve"/>
+        <Button
+          Grid.Row="1"
+          Grid.Column="2"
+          Name="btn_SHA1_Copy"
+          Content="Copy"/>
+
+        <!-- Row 2 -->
+        <!-- Row SHA256 -->
+        <Label
+          Grid.Row="2"
+          Grid.Column="0"
+          Name="lbl_SHA256"
+          Content="SHA256"/>
+        <TextBox
+          Grid.Row="2"
+          Grid.Column="1"
+          Name="txt_SHA256"
+          xml:space="preserve"/>
+        <Button
+          Grid.Row="2"
+          Grid.Column="2"
+          Name="btn_SHA256_Copy"
+          Content="Copy"/>
+
+        <!-- Row 3 -->
+        <!-- Digest -->
+        <Label
+          Grid.Row="3"
+          Grid.Column="0"
+          Name="lbl_Digest"
+          Content="Digest"/>
+        <TextBox
+          Grid.Row="3"
+          Grid.Column="1"
+          Name="txt_Digest"
+          xml:space="preserve"/>
+        <Button
+          Grid.Row="3"
+          Grid.Column="2"
+          Name="btn_Digest_Copy"
+          Content="Copy"/>
+      </Grid>
+
+      <Line
+        Grid.Row="1"
         Grid.Column="0"
         Grid.ColumnSpan="3"
         X1="0"
@@ -435,125 +691,198 @@ Add-Type -AssemblyName System.Windows.Forms
         StrokeThickness="2"
         Stretch="Uniform"/>
 
-      <!-- Row -->
-      <Label
-        Grid.Row="5"
+      <Grid
+        Grid.Row="2"
         Grid.Column="0"
-        Name="lbl_ProductName"
-        Content="Product Name"/>
-      <TextBox
-        Grid.Row="5"
-        Grid.Column="1"
-        Name="txt_ProductName"/>
-      <Button
-        Grid.Row="5"
-        Grid.Column="2"
-        Name="btn_ProductName_Copy"
-        Content="Copy"/>
+        Grid.ColumnSpan="3">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="32"/>
+          <RowDefinition Height="32"/>
+          <RowDefinition Height="32"/>
+          <RowDefinition Height="32"/>
+          <RowDefinition Height="32"/>
+          <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="100"/>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="75"/>
+        </Grid.ColumnDefinitions>
+        <Grid.Resources>
+          <Style TargetType="Label">
+            <Setter Property="Margin"
+                    Value="2.5"/>
+            <Setter Property="HorizontalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment"
+                    Value="Right"/>
+            <Setter Property="VerticalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="IsEnabled"
+                    Value="True"/>
+          </Style>
+          <Style TargetType="TextBox">
+            <Setter Property="Margin"
+                    Value="2.5"/>
+            <Setter Property="Width"
+                    Value="Auto"/>
+            <Setter Property="HorizontalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="IsEnabled"
+                    Value="True"/>
+            <Setter Property="IsReadOnly"
+                    Value="True"/>
+          </Style>
+          <Style TargetType="Button">
+            <Setter Property="Margin"
+                    Value="2.5"/>
+            <Setter Property="Width"
+                    Value="Auto"/>
+            <Setter Property="HorizontalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="IsEnabled"
+                    Value="False"/>
+          </Style>
+          <Style TargetType="ListBox">
+            <Setter Property="Margin"
+                    Value="2.5"/>                
+          </Style>
+          <Style TargetType="ListBoxItem">
+            <Setter Property="Margin"
+                    Value="1"/>
+            <Setter Property="HorizontalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="VerticalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="Height"
+                    Value="{Binding ElementName=lsbox_FilePath, Path=ActualHeight}"/>
+          </Style>
+        </Grid.Resources>
 
-      <!-- Row -->
-      <Label
-        Grid.Row="6"
-        Grid.Column="0"
-        Name="lbl_Manufacturer"
-        Content="Manufacturer"/>
-      <TextBox
-        Grid.Row="6"
-        Grid.Column="1"
-        Name="txt_Manufacture"
-        xml:space="preserve"/>
-      <Button
-        Grid.Row="6"
-        Grid.Column="2"
-        Name="btn_Manufacture_Copy"
-        Content="Copy"/>
+       <!-- Row -->
+        <Label
+          Grid.Row="0"
+          Grid.Column="0"
+          Name="lbl_ProductName"
+          Content="Product Name"/>
+        <TextBox
+          Grid.Row="0"
+          Grid.Column="1"
+          Name="txt_ProductName"/>
+        <Button
+          Grid.Row="0"
+          Grid.Column="2"
+          Name="btn_ProductName_Copy"
+          Content="Copy"/>
 
-      <!-- Row -->
-      <Label
-        Grid.Row="7"
-        Grid.Column="0"
-        Name="lbl_ProductVersion"
-        Content="Product Version"/>
-      <TextBox
-        Grid.Row="7"
-        Grid.Column="1"
-        Name="txt_ProductVersion"
-        xml:space="preserve"/>
-      <Button
-        Grid.Row="7"
-        Grid.Column="2"
-        Name="btn_ProductVersion_Copy"
-        Content="Copy"/>
+        <!-- Row -->
+        <Label
+          Grid.Row="1"
+          Grid.Column="0"
+          Name="lbl_Manufacturer"
+          Content="Manufacturer"/>
+        <TextBox
+          Grid.Row="1"
+          Grid.Column="1"
+          Name="txt_Manufacture"
+          xml:space="preserve"/>
+        <Button
+          Grid.Row="1"
+          Grid.Column="2"
+          Name="btn_Manufacture_Copy"
+          Content="Copy"/>
 
-      <!-- Row -->
-      <Label
-        Grid.Row="8"
-        Grid.Column="0"
-        Name="lbl_ProductCode"
-        Content="Product Code"/>
-      <TextBox
-        Grid.Row="8"
-        Grid.Column="1"
-        Name="txt_ProductCode"
-        xml:space="preserve"/>
-      <Button
-        Grid.Row="8"
-        Grid.Column="2"
-        Name="btn_ProductCode_Copy"
-        Content="Copy"/>
+        <!-- Row -->
+        <Label
+          Grid.Row="2"
+          Grid.Column="0"
+          Name="lbl_ProductVersion"
+          Content="Product Version"/>
+        <TextBox
+          Grid.Row="2"
+          Grid.Column="1"
+          Name="txt_ProductVersion"
+          xml:space="preserve"/>
+        <Button
+          Grid.Row="2"
+          Grid.Column="2"
+          Name="btn_ProductVersion_Copy"
+          Content="Copy"/>
 
-      <!-- Row -->
-      <Label
-        Grid.Row="9"
-        Grid.Column="0"
-        Name="lbl_UpgradeCode"
-        Content="Upgrade Code"/>
-      <TextBox
-        Grid.Row="9"
-        Grid.Column="1"
-        Name="txt_UpgradeCode"
-        xml:space="preserve"/>
-      <Button
-        Grid.Row="9"
-        Grid.Column="3"
-        Name="btn_UpgradeCode_Copy"
-        Content="Copy"/>
+        <!-- Row -->
+        <Label
+          Grid.Row="3"
+          Grid.Column="0"
+          Name="lbl_ProductCode"
+          Content="Product Code"/>
+        <TextBox
+          Grid.Row="3"
+          Grid.Column="1"
+          Name="txt_ProductCode"
+          xml:space="preserve"/>
+        <Button
+          Grid.Row="3"
+          Grid.Column="2"
+          Name="btn_ProductCode_Copy"
+          Content="Copy"/>
 
-      <!-- Row -->
-      <Button
-        Grid.Row="10"
-        Grid.Column="0"
-        Name="btn_AllProperties"
-        Margin="5"
-        HorizontalAlignment="Stretch"
-        VerticalAlignment="Stretch"
-        Content="All Properties"
-        Width="Auto"
-        IsEnabled="False"/>
-      <ListBox
-        Grid.Row="10"
-        Grid.Column="1"
-        Name="lsbox_FilePath"
-        Margin="5"
-        HorizontalAlignment="Stretch"
-        HorizontalContentAlignment="Center"
-        VerticalAlignment="Stretch"
-        VerticalContentAlignment="Center"
-        AllowDrop="True"
-        IsEnabled="True"
-        TabIndex="0">
-        <ListBox.Items>
-          <ListBoxItem>
-            <TextBlock Text="Drag and drop files here - *.msi"/>
-          </ListBoxItem>
-        </ListBox.Items>
-      </ListBox>
-      <Button
-        Grid.Row="10"
-        Grid.Column="3"
-        Name="btn_FilePath_Copy"
-        Content="Copy"/>
+        <!-- Row -->
+        <Label
+          Grid.Row="4"
+          Grid.Column="0"
+          Name="lbl_UpgradeCode"
+          Content="Upgrade Code"/>
+        <TextBox
+          Grid.Row="4"
+          Grid.Column="1"
+          Name="txt_UpgradeCode"
+          xml:space="preserve"/>
+        <Button
+          Grid.Row="4"
+          Grid.Column="2"
+          Name="btn_UpgradeCode_Copy"
+          Content="Copy"/>
 
+        <!-- Row -->
+        <Button
+          Grid.Row="5"
+          Grid.Column="0"
+          Name="btn_AllProperties"
+          Content="All Properties"
+          IsEnabled="False"/>
+        <ListBox
+          Grid.Row="5"
+          Grid.Column="1"
+          Name="lsbox_FilePath"
+          AllowDrop="True"
+          IsEnabled="True"
+          TabIndex="0">
+          <ListBox.Items>
+            <ListBoxItem>
+              <TextBlock Text="Drag and drop files here - *.msi"/>
+            </ListBoxItem>
+          </ListBox.Items>
+        </ListBox>
+        <Button
+          Grid.Row="5"
+          Grid.Column="2"
+          Name="btn_FilePath_Copy"
+          Content="Copy"/>
+      </Grid>
     </Grid>
   </DockPanel>
 </Window>
@@ -615,21 +944,8 @@ $formMSIProperties.Add_Loaded({
         $lsbox_FilePath.FontSize = 16
       }
       else {
-        # Get the MSI file properties
-        $FileMSIInfo = Get-MsiProperties -Path $FilePath
-
-        # Get the File Hash Information
-        $HashInfo = Get-FileHashInformation -Path $FilePath
-
-        # Populate the textboxes
-        Set-TextboxInformation -MSIPropertiesInfo $FileMSIInfo -FileHashInfo $HashInfo
-
-        # Enable the Copy buttons
-        Enable-AllButtons
-
-        # Clear the listbox and add the filename
-        $lsbox_FilePath.Items.Clear()
-        $lsbox_FilePath.Items.Add($FilePath)
+        # Get MSI Information
+        Invoke-GetMSIInformation -MSIPath $FilePath
       }
     }
   })
@@ -656,29 +972,8 @@ $lsbox_FilePath.Add_Drop({
         $lsbox_FilePath.FontSize = 16
       }
       else {
-        # Get the MSI file properties
-        $FileMSIInfo = Get-MsiProperties -Path $filename
-
-        # Get the File Hash Information
-        $HashInfo = Get-FileHashInformation -Path $filename
-
-        # Populate the textboxes
-        Set-TextboxInformation -MSIPropertiesInfo $FileMSIInfo -FileHashInfo $HashInfo
-
-        # Enable the Copy buttons
-        Enable-AllButtons
-
-        # Clear the listbox
-        $lsbox_FilePath.Items.Clear()
-
-        # Reset the listbox font style
-        $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::BackgroundProperty)
-        $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::ForegroundProperty)
-        $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::FontWeightProperty)
-        $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::FontSizeProperty)
-
-        # Add the filename to the listbox
-        $lsbox_FilePath.Items.Add($filename[0])
+        # Get MSI Information
+        Invoke-GetMSIInformation -MSIPath $filename
       }
     }
   })
