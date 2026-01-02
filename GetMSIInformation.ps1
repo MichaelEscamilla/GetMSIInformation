@@ -1,8 +1,8 @@
 <#PSScriptInfo
 
-.VERSION 2024.12.8.0
+.VERSION 2025.12.31.0
 
-.GUID f711f1e2-f8c2-412b-97a5-60a2cf6f1510
+.GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
 .AUTHOR Michael Escamilla
 
@@ -30,6 +30,7 @@
 2024.10.4.1   - Updated the version numbering, and a sepearator in the context menu.
 2024-10.13.0  - Added an error message when the file is locked
 2024-12.8.0   - Formatted Script for Publishing to PowerShell Gallery
+2025-12.31.0  - Added icon extraction
 
 .PRIVATEDATA
 
@@ -94,6 +95,8 @@ function Get-MsiProperties {
     [Parameter(Mandatory = $true)]
     [IO.FileInfo[]]$Path
   )
+
+  Write-Host "Getting MSI Properties for: [$Path]"
 	
   # Check if the MSI file path exists
   if (-not (Test-Path $Path)) {
@@ -110,7 +113,7 @@ function Get-MsiProperties {
   $MSIPropertyView = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT * FROM Property"))
 	
   # Execute the view query
-  $MSIPropertyView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $MSIPropertyView, $null)
+  $MSIPropertyView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $MSIPropertyView, $null) | Out-Null
 	
   # Fetch the first record from the result set
   $MSIRecord = $MSIPropertyView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $MSIPropertyView, $null)
@@ -132,6 +135,9 @@ function Get-MsiProperties {
     # Fetch the next record from the result set
     $MSIRecord = $MSIPropertyView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $MSIPropertyView, $null)
   }
+
+  # Close the Property view
+  $MSIPropertyView.GetType().InvokeMember("Close", "InvokeMethod", $null, $MSIPropertyView, $null) | Out-Null
 	
   # Return the System Object of properties
   $Properties
@@ -226,6 +232,7 @@ function Get-MsiIcon {
     [string]$ExportFolder = "$env:TEMP\GetMSIInformation"
   )
 
+  Write-Host "Getting MSI Icon for: [$Path]"
   
   # Ensure the export folder exists
   if (-not (Test-Path -Path $ExportFolder)) {
@@ -238,75 +245,137 @@ function Get-MsiIcon {
   # Open the MSI database in read-only mode
   $MSIDatabase = $WindowsInstaller.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $WindowsInstaller, @($Path.FullName, 0))
 
-  # Open a view on the Property table to get ARPPRODUCTICON property
-  $PropertyView = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Value FROM Property WHERE Property='ARPPRODUCTICON'"))
-
-  # Execute the view query
-  $PropertyView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $PropertyView, $null) | Out-Null
-
-  # Fetch the first record from the result set
-  $PropertyIconRecord = $PropertyView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $PropertyView, $null)
-
-  if (-not $PropertyIconRecord) {
-    throw "No ARPPRODUCTICON property found in MSI."
-  }
-  $ARPPRODUCTICONName = $PropertyIconRecord.StringData(1)
-
-  # Close the Property view
-  $PropertyView.GetType().InvokeMember("Close", "InvokeMethod", $null, $PropertyView, $null) | Out-Null
-
-  # Open a view on the Icon table to get the icon binary data
-  $IconView = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Name FROM _Tables WHERE Name='Icon'"))
-
-  # Execute the view query
-  $IconView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $IconView, $null) | Out-Null
-
-  # Fetch Record
-  $IconTable = $IconView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $IconView, $null)
-
-  # Close the Icon view
-  $IconView.GetType().InvokeMember("Close", "InvokeMethod", $null, $IconView, $null) | Out-Null
-  
-  if ($IconTable) {
-    # Get Icon Record based on ARPPRODUCTICON property
-    $IconData = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Name,Data FROM Icon WHERE Name='$ARPPRODUCTICONName'"))
+  # Check for an ARPPRODUCTICON property
+  try {
+    # Open a view on the Property table to get ARPPRODUCTICON property
+    $PropertyView = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Value FROM Property WHERE Property='ARPPRODUCTICON'"))
 
     # Execute the view query
-    $IconData.GetType().InvokeMember("Execute", "InvokeMethod", $null, $IconData, $null) | Out-Null
+    $PropertyView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $PropertyView, $null) | Out-Null
+
+    # Fetch the first record from the result set
+    $PropertyIconRecord = $PropertyView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $PropertyView, $null)
+
+    if ($PropertyIconRecord) {
+      $ARPPRODUCTICONName = $PropertyIconRecord.StringData(1)
+    }
+    else {
+      Write-Host "NO ARPPRODUCTICON property found in MSI."
+    }
+    
+    # Close the Property view
+    $PropertyView.GetType().InvokeMember("Close", "InvokeMethod", $null, $PropertyView, $null) | Out-Null
+  }
+  catch {
+    Write-Host "Error retrieving ARPPRODUCTICON property: $_"
+  }
+
+  # Get all Icons in the Icon table
+  try {
+    # Open a view on the Icon table to get the icon binary data
+    $IconView = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Name FROM _Tables WHERE Name='Icon'"))
+
+    # Execute the view query
+    $IconView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $IconView, $null) | Out-Null
 
     # Fetch Record
-    $IconRecord = $IconData.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $IconData, $null)
+    $IconTable = $IconView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $IconView, $null)
 
-    if ($IconRecord) {
-      # Get the 'Name' Field
-      $IconDataName = $IconData.GetType().InvokeMember("StringData", 'Public, Instance, GetProperty', $null, $IconRecord, 1)
+    # Close the Icon view
+    $IconView.GetType().InvokeMember("Close", "InvokeMethod", $null, $IconView, $null) | Out-Null
+  
+    if ($IconTable) {
+      # Get Icon Record based on ARPPRODUCTICON property
+      #$IconData = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Name,Data FROM Icon WHERE Name='$ARPPRODUCTICONName'"))
+      $IconData = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Name,Data FROM Icon"))
 
-      # Get the DataSize of the Binary Data
-      $IconDataSize = $IconData.GetType().InvokeMember("DataSize", "GetProperty", $null, $IconRecord, 2)
+      # Execute the view query
+      $IconData.GetType().InvokeMember("Execute", "InvokeMethod", $null, $IconData, $null) | Out-Null
 
-      # Read the Binary Data
-      $IconBinaryData = $IconData.GetType().InvokeMember("ReadStream", "InvokeMethod", $null, $IconRecord, @(2, $IconDataSize, 2))
+      # Fetch Record
+      #$IconRecord = $IconData.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $IconData, $null)
 
-      # Get Binary data as ANSI string - use Windows-1252 encoding
-      $ByteArray = [System.Text.Encoding]::GetEncoding(1252).GetBytes($IconBinaryData)
+      # Start Building PSCustomObject
+      [Collections.Generic.List[PSCustomObject]]$IconInformation = @()
 
-      # Construct the path to save the ICO file
-      $IconPathTemp = Join-Path -Path $ExportFolder -ChildPath "$($IconDataName).ico"
+      Do {
+        # Fetch the next record
+        $IconRecord = $IconData.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $IconData, $null)
 
-      # Check if the file already exists and delete it if necessary
-      if (Test-Path -Path $IconPathTemp) {
-        Remove-Item -Path $IconPathTemp -Force
+        if ($IconRecord) {
+          # Get the 'Name' Field
+          $IconDataName = $IconData.GetType().InvokeMember("StringData", 'Public, Instance, GetProperty', $null, $IconRecord, 1)
+
+          # Get the DataSize of the Binary Data
+          $IconDataSize = $IconData.GetType().InvokeMember("DataSize", "GetProperty", $null, $IconRecord, 2)
+
+          Write-Host "Found Icon: [$IconDataName] with Size: [$IconDataSize] bytes"
+
+          # Read the Binary Data
+          $IconBinaryData = $IconData.GetType().InvokeMember("ReadStream", "InvokeMethod", $null, $IconRecord, @(2, $IconDataSize, 2))
+
+          # Get Binary data as ANSI string - use Windows-1252 encoding
+          $ByteArray = [System.Text.Encoding]::GetEncoding(1252).GetBytes($IconBinaryData)
+
+          # Construct the path to save the ICO file
+          $IconPathTemp = Join-Path -Path $ExportFolder -ChildPath "$($IconDataName).ico"
+
+          # Check if the file already exists and delete it if necessary
+          if (Test-Path -Path $IconPathTemp) {
+            Remove-Item -Path $IconPathTemp -Force
+          }
+
+          # Write the byte array to an ICO file
+          [System.IO.File]::WriteAllBytes($IconPathTemp, $ByteArray)
+
+          # Create PSCustomObject for Icon Information
+          $IconInfoObject = [PSCustomObject]@{
+            Name = $IconDataName
+            Size = $IconDataSize
+            Path = $IconPathTemp
+          }
+
+          # Add to Icon Information List
+          $IconInformation.Add($IconInfoObject)
+        }
+      } While ($IconRecord)
+
+      <#
+      if ($IconRecord) {
+        # Get the 'Name' Field
+        $IconDataName = $IconData.GetType().InvokeMember("StringData", 'Public, Instance, GetProperty', $null, $IconRecord, 1)
+
+        # Get the DataSize of the Binary Data
+        $IconDataSize = $IconData.GetType().InvokeMember("DataSize", "GetProperty", $null, $IconRecord, 2)
+
+        # Read the Binary Data
+        $IconBinaryData = $IconData.GetType().InvokeMember("ReadStream", "InvokeMethod", $null, $IconRecord, @(2, $IconDataSize, 2))
+
+        # Get Binary data as ANSI string - use Windows-1252 encoding
+        $ByteArray = [System.Text.Encoding]::GetEncoding(1252).GetBytes($IconBinaryData)
+
+        # Construct the path to save the ICO file
+        $IconPathTemp = Join-Path -Path $ExportFolder -ChildPath "$($IconDataName).ico"
+
+        # Check if the file already exists and delete it if necessary
+        if (Test-Path -Path $IconPathTemp) {
+          Remove-Item -Path $IconPathTemp -Force
+        }
+
+        # Write the byte array to an ICO file
+        [System.IO.File]::WriteAllBytes($IconPathTemp, $ByteArray)
       }
+      #>
 
-      # Write the byte array to an ICO file
-      [System.IO.File]::WriteAllBytes($IconPathTemp, $ByteArray)
+      # Close the IconData view
+      $IconData.GetType().InvokeMember("Close", "InvokeMethod", $null, $IconData, $null) | Out-Null
     }
-
-    # Close the IconData view
-    $IconData.GetType().InvokeMember("Close", "InvokeMethod", $null, $IconData, $null) | Out-Null
+  }
+  catch {
+    Write-Host "Error retrieving Icons: $_"
   }
   
-  Return $IconPathTemp
+  Return $IconInformation
 }
 
 function Set-TextboxInformation {
@@ -334,46 +403,78 @@ function Set-TextboxInformation {
 function Set-IconImage {
   param (
     [Parameter(Mandatory = $true)]
-    [string]$IconPath
+    #[IO.FileInfo[]]$IconPath
+    [PSCustomObject[]]$IconObjects
   )
 
-  Write-Host "Setting icon image from path: [$IconPath]"
-  # Trim any leading or trailing whitespace from the icon path
-  $IconPath = $IconPath.Trim()
-  Write-Host "Setting icon image from path: [$IconPath]"
+  # Check if more than one icon is found
+  if ($IconObjects.Count -gt 1) {
+    Write-Host "Multiple icons found. Displaying the first one: $($IconObjects[0].Path)"
+  }
 
-  try {
-    if ($IconPath -and (Test-Path $IconPath)) {
+  # Start Building PSCustomObject
+  [Collections.Generic.List[PSCustomObject]]$Global:ImageControlIconList = @()
+
+  # Loop through each Icon
+  $IconIndex = 0
+  foreach ($IconObject in $IconObjects) {
+    Write-Host "Icon Found: Name: $($IconObject.Name) | Size: $($IconObject.Size) bytes | Path: $($IconObject.Path)"
+
+    if ((Test-Path ($IconObject.Path))) {
       # Create BitmapImage from the icon file
       $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
       $bitmap.BeginInit()
-      $bitmap.UriSource = New-Object System.Uri($IconPath)
+      $bitmap.UriSource = New-Object System.Uri($IconObject.Path)
       $bitmap.CacheOption = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
       $bitmap.EndInit()
       $bitmap.Freeze()
+
+      # Create a New Image Control in the Grid 'grid_Icon'
+      $ImageControlIcon = New-Object System.Windows.Controls.Image
+      $ImageControlIcon.SetValue([System.Windows.Controls.Control]::NameProperty, "img_Icon_$($IconObject.Name | Split-Path -LeafBase)")
+      $ImageControlIcon.Source = $bitmap
+      $ImageControlIcon.SetValue([System.Windows.Controls.Grid]::RowProperty, 0)
+      $ImageControlIcon.HorizontalAlignment = "Center"
+      $ImageControlIcon.VerticalAlignment = "Center"
+      # Make the Image Control Visible if it's the first icon
+      if ($IconIndex -eq 0) {
+        $ImageControlIcon.Visibility = "Visible"
+      }
+      else {
+        $ImageControlIcon.Visibility = "Collapsed"
+      }
+      $grid_Icon.Children.Add($ImageControlIcon)
+
+      # Create PSCustomObject for Image Control Information
+      $ImageControlIconInfo = [PSCustomObject]@{
+        Index        = $IconIndex
+        Name         = $ImageControlIcon.Name
+      }
+
+      # Add to Image Control Icon List
+      $Global:ImageControlIconList.Add($ImageControlIconInfo)
       
-      # Set the image source
+      # Set the Source for Image Control
       $img_Icon.Source = $bitmap
-      $img_Icon.Visibility = "Visible"
+
+      # Make the Image Control Visible and Hide the No Icon Label
+      $img_Icon.Visibility = "Collapsed"
       $lbl_NoIcon.Visibility = "Collapsed"
     }
     else {
-      # No icon available
+      # Hide the Image Control and show the No Icon Label
       $img_Icon.Visibility = "Collapsed"
       $lbl_NoIcon.Visibility = "Visible"
     }
   }
-  catch {
-    Write-Warning "Failed to display icon: $_"
-    $img_Icon.Visibility = "Collapsed"
-    $lbl_NoIcon.Visibility = "Visible"
-  }
+
+  $Global:CurrentIconIndex = 0
 }
 
 function Clear-IconImage {
   $img_Icon.Source = $null
   $img_Icon.Visibility = "Collapsed"
-  $lbl_NoIcon.Visibility = "Collapsed"
+  $lbl_NoIcon.Visibility = "Visible"
 }
 
 function Invoke-GetMSIInformation {
@@ -392,7 +493,7 @@ function Invoke-GetMSIInformation {
   Set-TextboxInformation -MSIPropertiesInfo $FileMSIInfo -FileHashInfo $HashInfo
 
   # Extract and display the icon
-  Set-IconImage -IconPath "$(Get-MsiIcon -Path $MSIPath)"
+  Set-IconImage -IconObjects (Get-MsiIcon -Path $MSIPath)
 
   # Enable the Copy buttons
   Enable-AllButtons -Exclude "IconExport"
@@ -406,6 +507,10 @@ function Invoke-GetMSIInformation {
   # Clear the listbox and add the filename
   $lsbox_FilePath.Items.Clear()
   $lsbox_FilePath.Items.Add($MSIPath[0])
+
+  # Remove lock on current file
+  [System.GC]::Collect()
+  [System.GC]::WaitForPendingFinalizers()
 }
 #endregion Functions
 
@@ -888,6 +993,9 @@ Add-Type -AssemblyName System.Windows.Forms
 </Window>
 "@
 
+# Import XAML
+[xml]$XAMLformMSIProperties = Get-Content -Path $PSScriptRoot\MSIProperties.xaml
+
 # Create a new XML node reader for reading the XAML content
 $readerformMSIProperties = New-Object System.Xml.XmlNodeReader $XAMLformMSIProperties
 
@@ -944,6 +1052,7 @@ $formMSIProperties.Add_Loaded({
         $lsbox_FilePath.FontSize = 16
       }
       else {
+        Write-Host "FilePath passed: [$FilePath]"
         # Get MSI Information
         Invoke-GetMSIInformation -MSIPath $FilePath
       }
@@ -991,6 +1100,46 @@ $lsbox_FilePath.Add_DragOver({
           # Set the drag effect to None if the file is not an MSI file
           $_.Effects = [System.Windows.DragDropEffects]::None
         }
+      }
+    }
+  })
+
+$btn_IconNext.add_Click({
+    # Get the Current Icon Index
+    $CurrentIndex = $Global:CurrentIconIndex
+    Write-Host "Current Icon Index: [$CurrentIndex]"
+
+    # Increment the Index
+    $NewIndex = $CurrentIndex + 1
+    Write-Host "New Icon Index: [$NewIndex]"
+
+    Write-Host " CurrentIndex: $($Global:ImageControlIconList)"
+
+    Write-Host "IconList Name for New Index: [$(($Global:ImageControlIconList | Where-Object { $_.Index -eq $NewIndex }).Name)]"
+
+    # Make the name of the next icon visible
+    foreach ($Icon in $Global:ImageControlIconInfo) {
+      if ($CurrentIndex -eq $Icon.Index) {
+        $Global:ImageControlIconInfo[$Icon.Index].Name.Visibility = "Visible"
+      }
+    }
+  })
+
+$btn_IconPrevious.add_Click({
+    # Get the Current Icon Index
+    $CurrentIndex = $Global:CurrentIconIndex
+    Write-Host "Current Icon Index: [$CurrentIndex]"
+
+    # Decrement the Index
+    $NewIndex = $CurrentIndex - 1
+    Write-Host "New Icon Index: [$NewIndex]"
+
+    Write-Host "IconList Name for New Index: [$($Global:ImageControlIconList[$NewIndex])]"
+
+    # Make the name of the previous icon visible
+    foreach ($Icon in $Global:ImageControlIconList) {
+      if ($CurrentIndex -eq $Icon.Index) {
+        $Global:ImageControlIconList[$Icon.Index].Name.Visibility = "Visible"
       }
     }
   })
