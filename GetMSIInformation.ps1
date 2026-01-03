@@ -61,13 +61,13 @@ param (
 ################# Variables #################
 #############################################
 # Script Name
-$Global:ScriptName = "GetMSIInformation.ps1"
+$Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Global:ScriptVersion = "2025.12.31.0"
+[System.Version]$Script:ScriptVersion = "2025.12.31.0"
 # Right-Click Menu Name
-$Global:RightClickMenuName = "Get MSI Information"
+$Script:RightClickMenuName = "Get MSI Information"
 # Get the Security Principal
-$Global:currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+$Script:currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 
 #############################################
 ################# Functions #################
@@ -176,12 +176,10 @@ function Clear-Textboxes {
     # Clear textbox
     $Textbox.Clear()
   }
-  # Clear the icon image
-  Clear-IconImage
 }
 
 # Stolen from: https://github.com/PatchMyPCTeam/CustomerTroubleshooting/blob/Release/PowerShell/Get-LocalContentHashes.ps1
-Function Get-EncodedHash {
+function Get-EncodedHash {
   [CmdletBinding()]
   Param(
     [Parameter(Position = 0)]
@@ -260,14 +258,14 @@ function Get-MsiIcon {
       $ARPPRODUCTICONName = $PropertyIconRecord.StringData(1)
     }
     else {
-      Write-Host "NO ARPPRODUCTICON property found in MSI."
+      Write-Verbose "NO ARPPRODUCTICON property found in MSI."
     }
     
     # Close the Property view
     $PropertyView.GetType().InvokeMember("Close", "InvokeMethod", $null, $PropertyView, $null) | Out-Null
   }
   catch {
-    Write-Host "Error retrieving ARPPRODUCTICON property: $_"
+    Write-Verbose "Error retrieving ARPPRODUCTICON property: $_"
   }
 
   # Get all Icons in the Icon table
@@ -309,7 +307,7 @@ function Get-MsiIcon {
           # Get the DataSize of the Binary Data
           $IconDataSize = $IconData.GetType().InvokeMember("DataSize", "GetProperty", $null, $IconRecord, 2)
 
-          Write-Host "Found Icon: [$IconDataName] with Size: [$IconDataSize] bytes"
+          Write-Verbose "Found Icon: [$IconDataName] with Size: [$IconDataSize] bytes"
 
           # Read the Binary Data
           $IconBinaryData = $IconData.GetType().InvokeMember("ReadStream", "InvokeMethod", $null, $IconRecord, @(2, $IconDataSize, 2))
@@ -318,7 +316,7 @@ function Get-MsiIcon {
           $ByteArray = [System.Text.Encoding]::GetEncoding(1252).GetBytes($IconBinaryData)
 
           # Construct the path to save the ICO file
-          $IconPathTemp = Join-Path -Path $ExportFolder -ChildPath "$($IconDataName).ico"
+          $IconPathTemp = Join-Path -Path $ExportFolder -ChildPath "$($IconDataName)"
 
           # Check if the file already exists and delete it if necessary
           if (Test-Path -Path $IconPathTemp) {
@@ -340,39 +338,12 @@ function Get-MsiIcon {
         }
       } While ($IconRecord)
 
-      <#
-      if ($IconRecord) {
-        # Get the 'Name' Field
-        $IconDataName = $IconData.GetType().InvokeMember("StringData", 'Public, Instance, GetProperty', $null, $IconRecord, 1)
-
-        # Get the DataSize of the Binary Data
-        $IconDataSize = $IconData.GetType().InvokeMember("DataSize", "GetProperty", $null, $IconRecord, 2)
-
-        # Read the Binary Data
-        $IconBinaryData = $IconData.GetType().InvokeMember("ReadStream", "InvokeMethod", $null, $IconRecord, @(2, $IconDataSize, 2))
-
-        # Get Binary data as ANSI string - use Windows-1252 encoding
-        $ByteArray = [System.Text.Encoding]::GetEncoding(1252).GetBytes($IconBinaryData)
-
-        # Construct the path to save the ICO file
-        $IconPathTemp = Join-Path -Path $ExportFolder -ChildPath "$($IconDataName).ico"
-
-        # Check if the file already exists and delete it if necessary
-        if (Test-Path -Path $IconPathTemp) {
-          Remove-Item -Path $IconPathTemp -Force
-        }
-
-        # Write the byte array to an ICO file
-        [System.IO.File]::WriteAllBytes($IconPathTemp, $ByteArray)
-      }
-      #>
-
       # Close the IconData view
       $IconData.GetType().InvokeMember("Close", "InvokeMethod", $null, $IconData, $null) | Out-Null
     }
   }
   catch {
-    Write-Host "Error retrieving Icons: $_"
+    Write-Verbose "Error retrieving Icons: $_"
   }
   
   Return $IconInformation
@@ -400,6 +371,135 @@ function Set-TextboxInformation {
   $txt_Digest.Text = $FileHashInfo.Digest
 }
 
+function Build-IconImageControls {
+  param (
+    [Parameter(Mandatory = $true)]
+    #[IO.FileInfo[]]$IconPath
+    [PSCustomObject[]]$IconObjects
+  )
+
+  # Start Building PSCustomObject
+  [Collections.Generic.List[PSCustomObject]]$Script:IconImageControlsList = @()
+
+  # Loop through each Icon
+  $IconIndex = 0
+  foreach ($IconObject in $IconObjects) {
+    
+    if ((Test-Path ($IconObject.Path))) {
+      # Convert the $IconObject.Path exe file icon to a BitmapImage
+      $iconBitmap = [System.Drawing.Icon]::ExtractAssociatedIcon($IconObject.Path)
+      $stream = [System.IO.FileStream]::new("C:\Users\MichaelEscamilla\AppData\Local\Temp\GetMSIInformation\ARPPRODUCTICON.ico", [IO.FileMode]::Create, [IO.FileAccess]::Write)
+      $iconBitmap.Save($stream)
+      $stream.Dispose()
+      $iconBitmap.Dispose()
+
+      # Create BitmapImage from the icon file
+      $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
+      $bitmap.BeginInit()
+      $bitmapURI = New-Object System.Uri($IconObject.Path)
+
+      #$bitmap.UriSource = New-Object System.Uri($IconObject.Path)
+      $bitmap.CacheOption = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
+      $bitmap.EndInit()
+      $bitmap.Freeze()
+      #>
+      # Create a New Image Control in the Grid 'grid_Icon'
+      $ImageControlIcon = New-Object System.Windows.Controls.Image
+      $ImageControlIcon.SetValue([System.Windows.Controls.Control]::NameProperty, "img_Icon_$(($IconObject.Name | Split-Path -LeafBase) -replace '[^a-zA-Z0-9]', '_')")
+      $ImageControlIcon.Source = $source
+      $ImageControlIcon.SetValue([System.Windows.Controls.Grid]::RowProperty, 0)
+      $ImageControlIcon.ToolTip = "Click to Export"
+      $ImageControlIcon.HorizontalAlignment = "Center"
+      $ImageControlIcon.VerticalAlignment = "Center"
+      $ImageControlIcon.Visibility = "Collapsed"
+      $ImageControlIcon.add_mouseleftbuttonup($Button_ExportToPNG_Handler)
+
+      # Add the Image Control to the Grid
+      $grid_Icon.Children.Add($ImageControlIcon)
+
+      # Create PSCustomObject for Image Control Information
+      $ImageControlIconInfo = [PSCustomObject]@{
+        Index    = $IconIndex
+        Name     = $ImageControlIcon.Name
+        IconName = "$($IconObject.Name | Split-Path -LeafBase)"
+        Control  = $ImageControlIcon
+      }
+      Write-Verbose "[$($MyInvocation.MyCommand.Name)]: Created ImageControlIconInfo: $($ImageControlIconInfo | Out-String)"
+
+      # Add to IconImageControlsList
+      $Script:IconImageControlsList.Add($ImageControlIconInfo)
+    }
+
+    # Increment the Icon Index
+    $IconIndex++
+  }
+}
+
+function Set-IconImageNavigation {
+  [CmdletBinding(DefaultParameterSetName = 'New')]
+  param (
+    [Parameter(Mandatory = $true, ParameterSetName = 'New')]
+    [Parameter(Mandatory = $true, ParameterSetName = 'Next')]
+    [Parameter(Mandatory = $true, ParameterSetName = 'Previous')]
+    [PSCustomObject[]]$IconObjects,
+    [Parameter(Mandatory = $false, ParameterSetName = 'Next')]
+    [switch]$Next,
+    [Parameter(Mandatory = $false, ParameterSetName = 'Previous')]
+    [switch]$Previous
+  )
+
+  # IconImageControlsList Count
+  $IconCount = $Script:IconImageControlsList.Count
+  Write-Verbose "[$($MyInvocation.MyCommand.Name)]: IconImageControlsList Count: [$IconCount]"
+
+  # Get the Current Icon Index
+  if ($null -eq $Script:CurrentIconIndex) {
+    $Script:CurrentIconIndex = 0
+  }
+  $CurrentIndex = $Script:CurrentIconIndex
+  Write-Verbose "[$($MyInvocation.MyCommand.Name)]: Current Icon Index: [$CurrentIndex]"
+  if ($Next) {
+    # Increment the Index
+    $NewIndex = $CurrentIndex + 1
+  }
+  elseif ($Previous) {
+    # Decrement the Index
+    $NewIndex = $CurrentIndex - 1
+  }
+  else {
+    # If neither Next nor Previous is specified, keep the current index
+    $NewIndex = $CurrentIndex
+  }
+
+  # Set GlobalIndex
+  $Script:CurrentIconIndex = $NewIndex
+  Write-Verbose "[$($MyInvocation.MyCommand.Name)]: New Icon Index: [$NewIndex]"
+
+  Write-Verbose "[$($MyInvocation.MyCommand.Name)]: IconImageControlsList Name for New Index: [$(($Script:IconImageControlsList | Where-Object { $_.Index -eq $NewIndex }).Name)]"
+    
+  # Hide the current Icon
+  ($Script:IconImageControlsList | Where-Object { $_.Index -eq $CurrentIndex }).Control.Visibility = "Hidden"
+
+  # Show the new Icon
+  ($Script:IconImageControlsList | Where-Object { $_.Index -eq $NewIndex }).Control.Visibility = "Visible"
+
+  # Set the Navigation button states
+  if ($IconCount -gt 1) {
+    if ($NewIndex -eq 0) {
+      $btn_IconPrevious.IsEnabled = $false
+      $btn_IconNext.IsEnabled = $true
+    }
+    elseif ($NewIndex -eq ($IconCount - 1)) {
+      $btn_IconPrevious.IsEnabled = $true
+      $btn_IconNext.IsEnabled = $false
+    }
+    else {
+      $btn_IconPrevious.IsEnabled = $true
+      $btn_IconNext.IsEnabled = $true
+    }
+  }
+}
+
 function Set-IconImage {
   param (
     [Parameter(Mandatory = $true)]
@@ -407,74 +507,43 @@ function Set-IconImage {
     [PSCustomObject[]]$IconObjects
   )
 
-  # Check if more than one icon is found
-  if ($IconObjects.Count -gt 1) {
-    Write-Host "Multiple icons found. Displaying the first one: $($IconObjects[0].Path)"
-  }
-
-  # Start Building PSCustomObject
-  [Collections.Generic.List[PSCustomObject]]$Global:ImageControlIconList = @()
-
-  # Loop through each Icon
-  $IconIndex = 0
-  foreach ($IconObject in $IconObjects) {
-    Write-Host "Icon Found: Name: $($IconObject.Name) | Size: $($IconObject.Size) bytes | Path: $($IconObject.Path)"
-
-    if ((Test-Path ($IconObject.Path))) {
-      # Create BitmapImage from the icon file
-      $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
-      $bitmap.BeginInit()
-      $bitmap.UriSource = New-Object System.Uri($IconObject.Path)
-      $bitmap.CacheOption = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
-      $bitmap.EndInit()
-      $bitmap.Freeze()
-
-      # Create a New Image Control in the Grid 'grid_Icon'
-      $ImageControlIcon = New-Object System.Windows.Controls.Image
-      $ImageControlIcon.SetValue([System.Windows.Controls.Control]::NameProperty, "img_Icon_$($IconObject.Name | Split-Path -LeafBase)")
-      $ImageControlIcon.Source = $bitmap
-      $ImageControlIcon.SetValue([System.Windows.Controls.Grid]::RowProperty, 0)
-      $ImageControlIcon.HorizontalAlignment = "Center"
-      $ImageControlIcon.VerticalAlignment = "Center"
-      # Make the Image Control Visible if it's the first icon
-      if ($IconIndex -eq 0) {
-        $ImageControlIcon.Visibility = "Visible"
-      }
-      else {
-        $ImageControlIcon.Visibility = "Collapsed"
-      }
-      $grid_Icon.Children.Add($ImageControlIcon)
-
-      # Create PSCustomObject for Image Control Information
-      $ImageControlIconInfo = [PSCustomObject]@{
-        Index        = $IconIndex
-        Name         = $ImageControlIcon.Name
-      }
-
-      # Add to Image Control Icon List
-      $Global:ImageControlIconList.Add($ImageControlIconInfo)
-      
-      # Set the Source for Image Control
-      $img_Icon.Source = $bitmap
-
-      # Make the Image Control Visible and Hide the No Icon Label
-      $img_Icon.Visibility = "Collapsed"
-      $lbl_NoIcon.Visibility = "Collapsed"
-    }
-    else {
-      # Hide the Image Control and show the No Icon Label
-      $img_Icon.Visibility = "Collapsed"
-      $lbl_NoIcon.Visibility = "Visible"
-    }
-  }
-
-  $Global:CurrentIconIndex = 0
+  Build-IconImageControls -IconObjects $IconObjects
+  Set-IconImageNavigation -IconObjects $Script:IconImageControlsList
 }
 
-function Clear-IconImage {
-  $img_Icon.Source = $null
-  $img_Icon.Visibility = "Collapsed"
+function Clear-IconImageControls {
+  # Clear the Script Scoped Variables
+  Remove-Variable -Name IconImageControlsList -Scope Script -ErrorAction SilentlyContinue
+  Remove-Variable -Name CurrentIconIndex -Scope Script -ErrorAction SilentlyContinue
+
+  # Reload all Icon Image Controls on the form into variables
+  $formMSIProperties.FindName("grid_Icon").Children | Where-Object { $_.Name -like "img_Icon*" } | ForEach-Object { Set-Variable -Name $_.Name -Value $_ -Scope Script }
+
+  # Get all Icon Image Controls that start with the name 'img_Icon' and Hide them
+  $IconImageControls = Get-Variable -Name "img_Icon*" -Scope Script -ErrorAction SilentlyContinue
+  if ($null -ne $IconImageControls) {
+    foreach ($IconImageControl in $IconImageControls) {
+      $IconImageControl.Value.Visibility = "Collapsed"
+    }
+  }
+
+  # Show the No Icon Label Visibility
   $lbl_NoIcon.Visibility = "Visible"
+
+  # Disable the Icon Navigation buttons
+  $btn_IconPrevious.IsEnabled = $false
+  $btn_IconNext.IsEnabled = $false
+}
+
+function Invoke-FormReset {
+  # Clear the Icon Image Controls
+  Clear-IconImageControls
+
+  # Clear the Textboxes
+  Clear-Textboxes
+  
+  # Clear the Listbox
+  $lsbox_FilePath.Items.Clear()
 }
 
 function Invoke-GetMSIInformation {
@@ -482,6 +551,8 @@ function Invoke-GetMSIInformation {
     [Parameter(Mandatory = $true)]
     [IO.FileInfo[]]$MSIPath
   )
+
+  Invoke-FormReset
 
   # Get the MSI file properties
   $FileMSIInfo = Get-MsiProperties -Path $MSIPath
@@ -492,11 +563,14 @@ function Invoke-GetMSIInformation {
   # Populate the textboxes
   Set-TextboxInformation -MSIPropertiesInfo $FileMSIInfo -FileHashInfo $HashInfo
 
-  # Extract and display the icon
-  Set-IconImage -IconObjects (Get-MsiIcon -Path $MSIPath)
+  # Extract and display the Icons
+  $IconObjects = Get-MsiIcon -Path $MSIPath
+  if ($null -ne $IconObjects) {
+    Set-IconImage -IconObjects $IconObjects
+  }
 
   # Enable the Copy buttons
-  Enable-AllButtons -Exclude "IconExport"
+  Enable-AllButtons -Exclude "Icon"
       
   # Reset the listbox font style
   #$lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::BackgroundProperty)
@@ -1003,7 +1077,7 @@ $readerformMSIProperties = New-Object System.Xml.XmlNodeReader $XAMLformMSIPrope
 [System.Windows.Window]$formMSIProperties = [Windows.Markup.XamlReader]::Load($readerformMSIProperties)
 
 # Create Variables for all the controls in the XAML form
-$XAMLformMSIProperties.SelectNodes("//*[@Name]") | ForEach-Object { Set-Variable -Name ($_.Name) -Value $formMSIProperties.FindName($_.Name) -Scope Global }
+$XAMLformMSIProperties.SelectNodes("//*[@Name]") | ForEach-Object { Set-Variable -Name ($_.Name) -Value $formMSIProperties.FindName($_.Name) -Scope Script }
 
 #############################################
 ############## Event Handlers ###############
@@ -1101,47 +1175,16 @@ $lsbox_FilePath.Add_DragOver({
           $_.Effects = [System.Windows.DragDropEffects]::None
         }
       }
+      $_.Handled = $true
     }
   })
 
 $btn_IconNext.add_Click({
-    # Get the Current Icon Index
-    $CurrentIndex = $Global:CurrentIconIndex
-    Write-Host "Current Icon Index: [$CurrentIndex]"
-
-    # Increment the Index
-    $NewIndex = $CurrentIndex + 1
-    Write-Host "New Icon Index: [$NewIndex]"
-
-    Write-Host " CurrentIndex: $($Global:ImageControlIconList)"
-
-    Write-Host "IconList Name for New Index: [$(($Global:ImageControlIconList | Where-Object { $_.Index -eq $NewIndex }).Name)]"
-
-    # Make the name of the next icon visible
-    foreach ($Icon in $Global:ImageControlIconInfo) {
-      if ($CurrentIndex -eq $Icon.Index) {
-        $Global:ImageControlIconInfo[$Icon.Index].Name.Visibility = "Visible"
-      }
-    }
+    Set-IconImageNavigation -IconObjects $Script:IconImageControlsList -Next
   })
 
 $btn_IconPrevious.add_Click({
-    # Get the Current Icon Index
-    $CurrentIndex = $Global:CurrentIconIndex
-    Write-Host "Current Icon Index: [$CurrentIndex]"
-
-    # Decrement the Index
-    $NewIndex = $CurrentIndex - 1
-    Write-Host "New Icon Index: [$NewIndex]"
-
-    Write-Host "IconList Name for New Index: [$($Global:ImageControlIconList[$NewIndex])]"
-
-    # Make the name of the previous icon visible
-    foreach ($Icon in $Global:ImageControlIconList) {
-      if ($CurrentIndex -eq $Icon.Index) {
-        $Global:ImageControlIconList[$Icon.Index].Name.Visibility = "Visible"
-      }
-    }
+    Set-IconImageNavigation -IconObjects $Script:IconImageControlsList -Previous
   })
 
 #### Menu Items ####  
@@ -1278,6 +1321,23 @@ $Button_Copy_Handler = {
         Write-Host "Copied to Clipboard: [$($lsbox_FilePath.Items[0])]"
       }
     }
+  }
+}
+
+$Button_ExportToPNG_Handler = {
+  # Get the current visible icon control
+  $CurrentIconControl = ($Script:IconImageControlsList | Where-Object { $_.Index -eq $Script:CurrentIconIndex })
+    
+  # Create a SaveFileDialog to get the export path
+  $SaveFileDialog = New-Object Microsoft.Win32.SaveFileDialog
+  $SaveFileDialog.Filter = "PNG Image (*.png)|*.png|ICO File (*.ico)|*.ico|All Files (*.*)|*.*"
+  $SaveFileDialog.Title = "Export Icon"
+  $SaveFileDialog.FileName = "$($CurrentIconControl.IconName)"
+
+  if ($SaveFileDialog.ShowDialog()) {
+    $SourcePath = $CurrentIconControl.Control.Source.UriSource.LocalPath
+    Copy-Item -Path $SourcePath -Destination $SaveFileDialog.FileName -Force
+    Write-Host "Icon exported to: $($SaveFileDialog.FileName)"
   }
 }
 
