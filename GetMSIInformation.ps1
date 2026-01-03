@@ -290,9 +290,6 @@ function Get-MsiIcon {
       # Execute the view query
       $IconData.GetType().InvokeMember("Execute", "InvokeMethod", $null, $IconData, $null) | Out-Null
 
-      # Fetch Record
-      #$IconRecord = $IconData.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $IconData, $null)
-
       # Start Building PSCustomObject
       [Collections.Generic.List[PSCustomObject]]$IconInformation = @()
 
@@ -384,29 +381,31 @@ function Build-IconImageControls {
   # Loop through each Icon
   $IconIndex = 0
   foreach ($IconObject in $IconObjects) {
-    
     if ((Test-Path ($IconObject.Path))) {
-      # Convert the $IconObject.Path exe file icon to a BitmapImage
-      $iconBitmap = [System.Drawing.Icon]::ExtractAssociatedIcon($IconObject.Path)
-      $stream = [System.IO.FileStream]::new("C:\Users\MichaelEscamilla\AppData\Local\Temp\GetMSIInformation\ARPPRODUCTICON.ico", [IO.FileMode]::Create, [IO.FileAccess]::Write)
-      $iconBitmap.Save($stream)
-      $stream.Dispose()
-      $iconBitmap.Dispose()
+      # IconBitmap File Path
+      $IconBitmapPath = Join-Path -Path "$($IconObject.Path | Split-Path -Parent)" -ChildPath "$($IconObject.Path | Split-Path -LeafBase)_Export.ico"
+
+      # Convert the Binary file to a Bitmap File at 256px
+      $iconBitmap = [System.Drawing.Icon]::ExtractIcon($IconObject.Path, 0, 256)
+
+      # Delete any existing ICO file
+      #Remove-Item -Path "$($IconBitmapPath)" -Force -ErrorAction SilentlyContinue | Out-Null
+
+      # Save the converted icon bitmap to a file
+      $iconBitmap.ToBitmap().Save("$($IconBitmapPath)")
 
       # Create BitmapImage from the icon file
-      $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
-      $bitmap.BeginInit()
-      $bitmapURI = New-Object System.Uri($IconObject.Path)
-
-      #$bitmap.UriSource = New-Object System.Uri($IconObject.Path)
-      $bitmap.CacheOption = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
-      $bitmap.EndInit()
-      $bitmap.Freeze()
-      #>
+      $Bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
+      $Bitmap.BeginInit()
+      $Bitmap.StreamSource = [System.IO.MemoryStream]::new([System.IO.File]::ReadAllBytes("$($IconBitmapPath)"))
+      $Bitmap.CacheOption = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
+      $Bitmap.EndInit()
+      $Bitmap.Freeze()
+      
       # Create a New Image Control in the Grid 'grid_Icon'
       $ImageControlIcon = New-Object System.Windows.Controls.Image
       $ImageControlIcon.SetValue([System.Windows.Controls.Control]::NameProperty, "img_Icon_$(($IconObject.Name | Split-Path -LeafBase) -replace '[^a-zA-Z0-9]', '_')")
-      $ImageControlIcon.Source = $source
+      $ImageControlIcon.Source = $Bitmap
       $ImageControlIcon.SetValue([System.Windows.Controls.Grid]::RowProperty, 0)
       $ImageControlIcon.ToolTip = "Click to Export"
       $ImageControlIcon.HorizontalAlignment = "Center"
@@ -419,12 +418,13 @@ function Build-IconImageControls {
 
       # Create PSCustomObject for Image Control Information
       $ImageControlIconInfo = [PSCustomObject]@{
-        Index    = $IconIndex
-        Name     = $ImageControlIcon.Name
-        IconName = "$($IconObject.Name | Split-Path -LeafBase)"
-        Control  = $ImageControlIcon
+        Index          = $IconIndex
+        Name           = $ImageControlIcon.Name
+        IconName       = "$($IconObject.Name | Split-Path -LeafBase)"
+        IconBinaryPath = "$($IconObject.Path)"
+        IconBitmapPath = "$($IconBitmapPath)"
+        Control        = $ImageControlIcon
       }
-      Write-Verbose "[$($MyInvocation.MyCommand.Name)]: Created ImageControlIconInfo: $($ImageControlIconInfo | Out-String)"
 
       # Add to IconImageControlsList
       $Script:IconImageControlsList.Add($ImageControlIconInfo)
@@ -450,14 +450,12 @@ function Set-IconImageNavigation {
 
   # IconImageControlsList Count
   $IconCount = $Script:IconImageControlsList.Count
-  Write-Verbose "[$($MyInvocation.MyCommand.Name)]: IconImageControlsList Count: [$IconCount]"
 
   # Get the Current Icon Index
   if ($null -eq $Script:CurrentIconIndex) {
     $Script:CurrentIconIndex = 0
   }
   $CurrentIndex = $Script:CurrentIconIndex
-  Write-Verbose "[$($MyInvocation.MyCommand.Name)]: Current Icon Index: [$CurrentIndex]"
   if ($Next) {
     # Increment the Index
     $NewIndex = $CurrentIndex + 1
@@ -473,9 +471,6 @@ function Set-IconImageNavigation {
 
   # Set GlobalIndex
   $Script:CurrentIconIndex = $NewIndex
-  Write-Verbose "[$($MyInvocation.MyCommand.Name)]: New Icon Index: [$NewIndex]"
-
-  Write-Verbose "[$($MyInvocation.MyCommand.Name)]: IconImageControlsList Name for New Index: [$(($Script:IconImageControlsList | Where-Object { $_.Index -eq $NewIndex }).Name)]"
     
   # Hide the current Icon
   ($Script:IconImageControlsList | Where-Object { $_.Index -eq $CurrentIndex }).Control.Visibility = "Hidden"
@@ -552,6 +547,7 @@ function Invoke-GetMSIInformation {
     [IO.FileInfo[]]$MSIPath
   )
 
+  # Reset the form
   Invoke-FormReset
 
   # Get the MSI file properties
@@ -571,12 +567,6 @@ function Invoke-GetMSIInformation {
 
   # Enable the Copy buttons
   Enable-AllButtons -Exclude "Icon"
-      
-  # Reset the listbox font style
-  #$lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::BackgroundProperty)
-  #$lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::ForegroundProperty)
-  #$lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::FontWeightProperty)
-  #$lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::FontSizeProperty)
 
   # Clear the listbox and add the filename
   $lsbox_FilePath.Items.Clear()
@@ -1335,7 +1325,7 @@ $Button_ExportToPNG_Handler = {
   $SaveFileDialog.FileName = "$($CurrentIconControl.IconName)"
 
   if ($SaveFileDialog.ShowDialog()) {
-    $SourcePath = $CurrentIconControl.Control.Source.UriSource.LocalPath
+    $SourcePath = $CurrentIconControl.IconBitmapPath
     Copy-Item -Path $SourcePath -Destination $SaveFileDialog.FileName -Force
     Write-Host "Icon exported to: $($SaveFileDialog.FileName)"
   }
