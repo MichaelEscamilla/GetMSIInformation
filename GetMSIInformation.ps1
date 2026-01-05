@@ -64,8 +64,11 @@ param (
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
 [System.Version]$Script:ScriptVersion = "2025.12.31.0"
-# Right-Click Menu Name
+# Right-Click Menu
 $Script:RightClickMenuName = "Get MSI Information"
+$Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
+# Icon Temp Folder Path
+$Script:IconTempFolderPath = "$env:TEMP\GetMSIInformation\Icons"
 # Get the Security Principal
 $Script:currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 
@@ -227,7 +230,7 @@ function Get-MsiIcon {
     [Parameter(Mandatory = $true)]
     [IO.FileInfo[]]$Path,
     [Parameter(Mandatory = $false)]
-    [string]$ExportFolder = "$env:TEMP\GetMSIInformation"
+    [string]$ExportFolder = "$($Script:IconTempFolderPath)"
   )
 
   Write-Host "Getting MSI Icon for: [$Path]"
@@ -242,31 +245,6 @@ function Get-MsiIcon {
     
   # Open the MSI database in read-only mode
   $MSIDatabase = $WindowsInstaller.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $WindowsInstaller, @($Path.FullName, 0))
-
-  # Check for an ARPPRODUCTICON property
-  try {
-    # Open a view on the Property table to get ARPPRODUCTICON property
-    $PropertyView = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Value FROM Property WHERE Property='ARPPRODUCTICON'"))
-
-    # Execute the view query
-    $PropertyView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $PropertyView, $null) | Out-Null
-
-    # Fetch the first record from the result set
-    $PropertyIconRecord = $PropertyView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $PropertyView, $null)
-
-    if ($PropertyIconRecord) {
-      $ARPPRODUCTICONName = $PropertyIconRecord.StringData(1)
-    }
-    else {
-      Write-Verbose "NO ARPPRODUCTICON property found in MSI."
-    }
-    
-    # Close the Property view
-    $PropertyView.GetType().InvokeMember("Close", "InvokeMethod", $null, $PropertyView, $null) | Out-Null
-  }
-  catch {
-    Write-Verbose "Error retrieving ARPPRODUCTICON property: $_"
-  }
 
   # Get all Icons in the Icon table
   try {
@@ -283,8 +261,7 @@ function Get-MsiIcon {
     $IconView.GetType().InvokeMember("Close", "InvokeMethod", $null, $IconView, $null) | Out-Null
   
     if ($IconTable) {
-      # Get Icon Record based on ARPPRODUCTICON property
-      #$IconData = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Name,Data FROM Icon WHERE Name='$ARPPRODUCTICONName'"))
+      # Open a view on the Icon table
       $IconData = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Name,Data FROM Icon"))
 
       # Execute the view query
@@ -371,7 +348,6 @@ function Set-TextboxInformation {
 function Build-IconImageControls {
   param (
     [Parameter(Mandatory = $true)]
-    #[IO.FileInfo[]]$IconPath
     [PSCustomObject[]]$IconObjects
   )
 
@@ -382,19 +358,27 @@ function Build-IconImageControls {
   $IconIndex = 0
   foreach ($IconObject in $IconObjects) {
     if ((Test-Path ($IconObject.Path))) {
-      # IconBitmap File Path
-      $IconBitmapPath = Join-Path -Path "$($IconObject.Path | Split-Path -Parent)" -ChildPath "$($IconObject.Path | Split-Path -LeafBase)_Export.ico"
+      # IconBitmap Export File Path
+      $IconBitmapPath = Join-Path -Path "$($IconObject.Path | Split-Path -Parent)" -ChildPath "$([System.IO.Path]::GetFileNameWithoutExtension($IconObject.Name))_Export.ico"
 
-      # Convert the Binary file to a Bitmap File at 256px
-      $iconBitmap = [System.Drawing.Icon]::ExtractIcon($IconObject.Path, 0, 256)
+      # Extract the Binary file to a Bitmap File at 256px
+      $IconExtract = [System.Drawing.Icon]::ExtractIcon($IconObject.Path, 0, 256)
+      #$IconExtract = [System.Drawing.Icon]::ExtractAssociatedIcon($IconObject.Path)
+      #$IconExtract = [System.Drawing.Icon]::new($IconExtract, 256, 256)
+      #[System.IntPtr] $phiconSmall = 0
+      #[System.IntPtr] $phiconLarge = 0
+      #$nofImages = [Shell32_Extract]::ExtractIconEx($IconObject.Path, -1, [ref] $phiconLarge, [ref] $phiconSmall, 0)
+      #$nofIconsExtracted = [Shell32_Extract]::ExtractIconEx($IconObject.Path, 0, [ref] $phiconLarge, [ref] $phiconSmall, 1)
+      #$iconSmall = [System.Drawing.Icon]::FromHandle($phiconSmall)
+      #$IconExtract = [System.Drawing.Icon]::FromHandle($phiconLarge)
 
       # Delete any existing ICO file
       #Remove-Item -Path "$($IconBitmapPath)" -Force -ErrorAction SilentlyContinue | Out-Null
 
-      # Save the converted icon bitmap to a file
-      $iconBitmap.ToBitmap().Save("$($IconBitmapPath)")
+      # Save the Extracted icon to a bitmap file
+      $IconExtract.ToBitmap().Save("$($IconBitmapPath)")
 
-      # Create BitmapImage from the icon file
+      # Create BitmapImage from the Bitmap file
       $Bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
       $Bitmap.BeginInit()
       $Bitmap.StreamSource = [System.IO.MemoryStream]::new([System.IO.File]::ReadAllBytes("$($IconBitmapPath)"))
@@ -404,7 +388,8 @@ function Build-IconImageControls {
       
       # Create a New Image Control in the Grid 'grid_Icon'
       $ImageControlIcon = New-Object System.Windows.Controls.Image
-      $ImageControlIcon.SetValue([System.Windows.Controls.Control]::NameProperty, "img_Icon_$(($IconObject.Name | Split-Path -LeafBase) -replace '[^a-zA-Z0-9]', '_')")
+      #$ImageControlIcon.SetValue([System.Windows.Controls.Control]::NameProperty, "img_Icon_$(($IconObject.Name | Split-Path -LeafBase) -replace '[^a-zA-Z0-9]', '_')")
+      $ImageControlIcon.SetValue([System.Windows.Controls.Control]::NameProperty, "img_Icon_$(([System.IO.Path]::GetFileNameWithoutExtension($IconObject.Name)) -replace '[^a-zA-Z0-9]', '_')")
       $ImageControlIcon.Source = $Bitmap
       $ImageControlIcon.SetValue([System.Windows.Controls.Grid]::RowProperty, 0)
       $ImageControlIcon.ToolTip = "Click to Export"
@@ -413,14 +398,14 @@ function Build-IconImageControls {
       $ImageControlIcon.Visibility = "Collapsed"
       $ImageControlIcon.add_mouseleftbuttonup($Button_ExportToPNG_Handler)
 
-      # Add the Image Control to the Grid
+      # Add the Image Control to the Grid 'grid_Icon'
       $grid_Icon.Children.Add($ImageControlIcon)
 
-      # Create PSCustomObject for Image Control Information
+      # Create PSCustomObject for the Image Control Information
       $ImageControlIconInfo = [PSCustomObject]@{
         Index          = $IconIndex
         Name           = $ImageControlIcon.Name
-        IconName       = "$($IconObject.Name | Split-Path -LeafBase)"
+        IconName       = "$([System.IO.Path]::GetFileNameWithoutExtension($IconObject.Name))"
         IconBinaryPath = "$($IconObject.Path)"
         IconBitmapPath = "$($IconBitmapPath)"
         Control        = $ImageControlIcon
@@ -498,11 +483,13 @@ function Set-IconImageNavigation {
 function Set-IconImage {
   param (
     [Parameter(Mandatory = $true)]
-    #[IO.FileInfo[]]$IconPath
     [PSCustomObject[]]$IconObjects
   )
 
+  # Build the Icon Image Controls
   Build-IconImageControls -IconObjects $IconObjects
+
+  # Set the Icon Image Navigation
   Set-IconImageNavigation -IconObjects $Script:IconImageControlsList
 }
 
@@ -537,8 +524,15 @@ function Invoke-FormReset {
   # Clear the Textboxes
   Clear-Textboxes
   
-  # Clear the Listbox
+  # Clear and Reset the listbox font style
   $lsbox_FilePath.Items.Clear()
+  $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::BackgroundProperty)
+  $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::ForegroundProperty)
+  $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::FontWeightProperty)
+  $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::FontSizeProperty)
+
+  # Disable all buttons
+  Disable-AllButtons
 }
 
 function Invoke-GetMSIInformation {
@@ -585,6 +579,30 @@ function Invoke-GetMSIInformation {
 # Load Assemblies
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+Add-Type -TypeDefinition '
+using System;
+using System.Runtime.InteropServices;
+
+public class Shell32_Extract {
+
+  [DllImport(
+     "Shell32.dll",
+      EntryPoint        = "ExtractIconExW",
+      CharSet           =  CharSet.Unicode,
+      ExactSpelling     =  true,
+      CallingConvention =  CallingConvention.StdCall)
+  ]
+
+  public static extern int ExtractIconEx(
+    string lpszFile          , // Name of the .exe or .dll that contains the icon
+    int    iconIndex         , // zero based index of first icon to extract. If iconIndex == 0 and and phiconSmall == null and phiconSmall = null, the number of icons is returnd
+    out    IntPtr phiconLarge,
+    out    IntPtr phiconSmall,
+    int    nIcons
+  );
+}
+'
 
 # Build the GUI
 [xml]$XAMLformMSIProperties = @"
@@ -600,11 +618,17 @@ Add-Type -AssemblyName System.Windows.Forms
 
   <DockPanel>
     <Menu DockPanel.Dock="Top">
+      <MenuItem Header="File">
+        <MenuItem Name="MenuItem_Open"
+                  Header="Open Icon Temp Folder"/>
+      </MenuItem>
       <MenuItem Header="Right Click Menu">
         <MenuItem Name="MenuItem_Install"
                   Header="Install"/>
         <MenuItem Name="MenuItem_Uninstall"
                   Header="Uninstall"/>
+        <MenuItem Name="MenuItem_Open_RCM"
+                  Header="Open Right Click Menu Folder"/>
       </MenuItem>
       <MenuItem Header="About">
         <MenuItem Name="MenuItem_GitHub"
@@ -637,6 +661,10 @@ Add-Type -AssemblyName System.Windows.Forms
           <RowDefinition Height="100"/>
           <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="0.5*"/>
+          <ColumnDefinition Width="0.5*"/>
+        </Grid.ColumnDefinitions>
         <Grid.Resources>
           <Style TargetType="Button">
             <Setter Property="Margin"
@@ -660,10 +688,13 @@ Add-Type -AssemblyName System.Windows.Forms
         
         <Border
           Grid.Row="0"
+          Grid.Column="0"
+          Grid.ColumnSpan="2"
           BorderBrush="Black"
           BorderThickness="1"
           Background="WhiteSmoke">
-          <Grid>
+          <Grid
+            Name="grid_Icon">
             <Image
               Grid.Row="0"
               Name="img_Icon"
@@ -685,8 +716,15 @@ Add-Type -AssemblyName System.Windows.Forms
         </Border>
         <Button
           Grid.Row="1"
-          Name="btn_IconExport"
-          Content="Export Icon"
+          Grid.Column="0"
+          Name="btn_IconPrevious"
+          Content="&lt;--"
+          IsEnabled="False"/>
+        <Button
+          Grid.Row="1"
+          Grid.Column="1"
+          Name="btn_IconNext"
+          Content="-->"
           IsEnabled="False"/>
       </Grid>
 
@@ -925,10 +963,16 @@ Add-Type -AssemblyName System.Windows.Forms
           <Style TargetType="ListBox">
             <Setter Property="Margin"
                     Value="2.5"/>                
+            <Setter Property="HorizontalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="VerticalAlignment"
+                    Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
           </Style>
           <Style TargetType="ListBoxItem">
-            <Setter Property="Margin"
-                    Value="1"/>
             <Setter Property="HorizontalAlignment"
                     Value="Stretch"/>
             <Setter Property="HorizontalContentAlignment"
@@ -1058,7 +1102,7 @@ Add-Type -AssemblyName System.Windows.Forms
 "@
 
 # Import XAML
-[xml]$XAMLformMSIProperties = Get-Content -Path $PSScriptRoot\MSIProperties.xaml
+#[xml]$XAMLformMSIProperties = Get-Content -Path $PSScriptRoot\MSIProperties.xaml
 
 # Create a new XML node reader for reading the XAML content
 $readerformMSIProperties = New-Object System.Xml.XmlNodeReader $XAMLformMSIProperties
@@ -1128,6 +1172,9 @@ $lsbox_FilePath.Add_Drop({
     $filename = $_.Data.GetData([Windows.Forms.DataFormats]::FileDrop)
     Write-Host "File Dropped: [$filename]"
     if ($filename) {
+      # Reset the form
+      Invoke-FormReset
+
       # Check if $FilePath is locked
       if (Test-FileLock -Path "$($filename)") {
         Write-Warning "The file is locked: [$filename]"
@@ -1177,7 +1224,15 @@ $btn_IconPrevious.add_Click({
     Set-IconImageNavigation -IconObjects $Script:IconImageControlsList -Previous
   })
 
-#### Menu Items ####  
+#### Menu Items ####
+$MenuItem_Open.add_Click({
+    # Open the Icon Temp Folder
+    if (-not (Test-Path $Script:IconTempFolderPath)) {
+      New-Item -ItemType Directory -Path $Script:IconTempFolderPath -ErrorAction SilentlyContinue
+    }
+    Invoke-Item -Path $Script:IconTempFolderPath
+  })
+
 $MenuItem_Install.add_Click({
     Write-Host "Menu Item Install Clicked"
     # Set Script Name
@@ -1185,7 +1240,7 @@ $MenuItem_Install.add_Click({
 
     # Create a new directory in the LOCALAPPDATA folder
     Write-Host "Creating GetMSIInformation folder in LOCALAPPDATA folder"
-    $DestinationFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
+    $DestinationFolderPath = "$($Script:RightClickMenuFolderPath)"
     if (-not (Test-Path $DestinationFolderPath)) {
       $DestinationFolder = New-Item -ItemType Directory -Path $DestinationFolderPath -ErrorAction SilentlyContinue
     }
@@ -1267,6 +1322,15 @@ $MenuItem_Uninstall.add_Click({
     Write-Output "Uninstallation Complete!"
   })
 
+$MenuItem_Open_RCM.add_Click({
+    # Open the Right Click Menu Folder
+    $RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
+    if (-not (Test-Path $RightClickMenuFolderPath)) {
+      New-Item -ItemType Directory -Path $RightClickMenuFolderPath -ErrorAction SilentlyContinue
+    }
+    Invoke-Item -Path $RightClickMenuFolderPath
+  })
+
 $MenuItem_GitHub.add_Click({
     # Open Github Project Page
     Start-Process "https://github.com/MichaelEscamilla/GetMSIInformation"
@@ -1315,7 +1379,7 @@ $Button_Copy_Handler = {
 }
 
 $Button_ExportToPNG_Handler = {
-  # Get the current visible icon control
+  # Get the Icon Control
   $CurrentIconControl = ($Script:IconImageControlsList | Where-Object { $_.Index -eq $Script:CurrentIconIndex })
     
   # Create a SaveFileDialog to get the export path

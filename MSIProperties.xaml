@@ -11,11 +11,17 @@
 
   <DockPanel>
     <Menu DockPanel.Dock="Top">
+      <MenuItem Header="File">
+        <MenuItem Name="MenuItem_Open"
+                  Header="Open Icon Temp Folder"/>
+      </MenuItem>
       <MenuItem Header="Right Click Menu">
         <MenuItem Name="MenuItem_Install"
                   Header="Install"/>
         <MenuItem Name="MenuItem_Uninstall"
                   Header="Uninstall"/>
+        <MenuItem Name="MenuItem_Open_RCM"
+                  Header="Open Right Click Menu Folder"/>
       </MenuItem>
       <MenuItem Header="About">
         <MenuItem Name="MenuItem_GitHub"
