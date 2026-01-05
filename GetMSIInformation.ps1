@@ -1258,6 +1258,16 @@ $MenuItem_Install.add_Click({
       $DestinationFolder = Get-Item -Path $DestinationFolderPath
     }
 
+    # Test using $MyInvocation.MyCommand.ScriptContents to save script regardless if run from Internet or local
+    $ScriptContents = $MyInvocation.MyCommand.ScriptContents
+    if ($ScriptContents) {
+      Write-Host "Saving script using MyInvocation.MyCommand.ScriptContents"
+      $ScriptContents | Out-File -FilePath "$($DestinationFolder.FullName)1\$($SaveAsScriptName)" -Encoding UTF8 -Force -ErrorAction SilentlyContinue
+    }
+    else {
+      Write-Host "MyInvocation.MyCommand.ScriptContents is not available."
+    }
+
     # Check if the script is being Invoked from the Internet
     if ($PSCommandPath -ne "") {
       # Copy the script to the new directory
