@@ -1268,6 +1268,7 @@ $MenuItem_Install.add_Click({
       Write-Host "PSCommandPath is not available."
       # Script URL
       $ScriptURL = "https://raw.githubusercontent.com/MichaelEscamilla/GetMSIInformation/main/GetMSIInformation.ps1"
+      $ScriptURL = "https://raw.githubusercontent.com/MichaelEscamilla/GetMSIInformation/refs/heads/red-cat/GetMSIInformation.ps1"
       Write-Host "Downloading the script from URL: [$ScriptURL]"
       try {
         Invoke-WebRequest -Uri $ScriptURL -OutFile "$($DestinationFolder.FullName)\$($SaveAsScriptName)" -ErrorAction Stop
