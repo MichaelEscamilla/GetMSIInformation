@@ -71,6 +71,10 @@ $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 $Script:IconTempFolderPath = "$env:TEMP\GetMSIInformation\Icons"
 # Get the Security Principal
 $Script:currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+# Get PowerShell Version
+$Script:ScriptPSVersion = $PSVersionTable.PSVersion
+# Get Pwsh Path
+$Script:PowerShellPath = (Get-Command pwsh.exe -ErrorAction SilentlyContinue)
 
 #############################################
 ################# Functions #################
@@ -362,15 +366,14 @@ function Build-IconImageControls {
       $IconBitmapPath = Join-Path -Path "$($IconObject.Path | Split-Path -Parent)" -ChildPath "$([System.IO.Path]::GetFileNameWithoutExtension($IconObject.Name))_Export.ico"
 
       # Extract the Binary file to a Bitmap File at 256px
-      $IconExtract = [System.Drawing.Icon]::ExtractIcon($IconObject.Path, 0, 256)
-      #$IconExtract = [System.Drawing.Icon]::ExtractAssociatedIcon($IconObject.Path)
-      #$IconExtract = [System.Drawing.Icon]::new($IconExtract, 256, 256)
-      #[System.IntPtr] $phiconSmall = 0
-      #[System.IntPtr] $phiconLarge = 0
-      #$nofImages = [Shell32_Extract]::ExtractIconEx($IconObject.Path, -1, [ref] $phiconLarge, [ref] $phiconSmall, 0)
-      #$nofIconsExtracted = [Shell32_Extract]::ExtractIconEx($IconObject.Path, 0, [ref] $phiconLarge, [ref] $phiconSmall, 1)
-      #$iconSmall = [System.Drawing.Icon]::FromHandle($phiconSmall)
-      #$IconExtract = [System.Drawing.Icon]::FromHandle($phiconLarge)
+      if ($Script:ScriptPSVersion -lt [Version]"7.4") {
+        # This is the only method available in .NET 4.x.x
+        $IconExtract = [System.Drawing.Icon]::ExtractAssociatedIcon($IconObject.Path)
+      }
+      else {
+        # This uses newer .NET methods from 8+ and results in higher quality images
+        $IconExtract = [System.Drawing.Icon]::ExtractIcon($IconObject.Path, 0, 256)
+      }
 
       # Delete any existing ICO file
       #Remove-Item -Path "$($IconBitmapPath)" -Force -ErrorAction SilentlyContinue | Out-Null
@@ -388,11 +391,17 @@ function Build-IconImageControls {
       
       # Create a New Image Control in the Grid 'grid_Icon'
       $ImageControlIcon = New-Object System.Windows.Controls.Image
-      #$ImageControlIcon.SetValue([System.Windows.Controls.Control]::NameProperty, "img_Icon_$(($IconObject.Name | Split-Path -LeafBase) -replace '[^a-zA-Z0-9]', '_')")
       $ImageControlIcon.SetValue([System.Windows.Controls.Control]::NameProperty, "img_Icon_$(([System.IO.Path]::GetFileNameWithoutExtension($IconObject.Name)) -replace '[^a-zA-Z0-9]', '_')")
       $ImageControlIcon.Source = $Bitmap
       $ImageControlIcon.SetValue([System.Windows.Controls.Grid]::RowProperty, 0)
-      $ImageControlIcon.ToolTip = "Click to Export"
+      $ToolTip = New-Object System.Windows.Controls.ToolTip
+      if ($Script:ScriptPSVersion -lt [Version]"7.4") {
+        $ToolTip.Content = "Click to Export.`nUse PowerShell 7.4 or higher for better quality."
+        $ToolTip.Background = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.Colors]::LightGoldenrodYellow)
+        $ToolTip.Foreground = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.Colors]::Red)
+      } else { $ToolTip.Content = "Click to Export"}
+      $ImageControlIcon.ToolTip = $ToolTip
+      $ImageControlIcon.SetValue([System.Windows.Controls.ToolTipService]::InitialShowDelayProperty, 100)
       $ImageControlIcon.HorizontalAlignment = "Center"
       $ImageControlIcon.VerticalAlignment = "Center"
       $ImageControlIcon.Visibility = "Collapsed"
@@ -570,6 +579,31 @@ function Invoke-GetMSIInformation {
   [System.GC]::Collect()
   [System.GC]::WaitForPendingFinalizers()
 }
+
+function Invoke-LaunchAsPwsh {
+  # Are we running as PowerShell 7.4 or higher
+  if ($Script:ScriptPSVersion -ge [Version]"7.4") {
+    Write-Host "Running PowerShell 7.4 or higher"
+  }
+  else {
+    # Check that PowerShell is installed
+    if ($Script:PowerShellPath) {
+      # Check that it is version 7.4 or higher
+      if ($Script:PowerShellPath.Version -lt [Version]"7.4") {
+        Write-Host "Installed PowerShell (pwsh.exe) version [$($Script:PowerShellPath.Version)] is lower than 7.4. Continuing with existing PowerShell version [$($Script:ScriptPSVersion)]..."
+      }
+      else {
+        # Start PowerShell and run the script
+        Write-Host "Relaunching script in PowerShell (pwsh.exe)..."
+        Start-Process -FilePath $Script:PowerShellPath -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File `"$PSCommandPath`" -FilePath `"$FilePath`""
+        Exit
+      }
+    }
+    else {
+      Write-Host "PowerShell (pwsh.exe) is not installed on this system."
+    }
+  }
+}
 #endregion Functions
 
 #############################################
@@ -579,30 +613,6 @@ function Invoke-GetMSIInformation {
 # Load Assemblies
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-Add-Type -TypeDefinition '
-using System;
-using System.Runtime.InteropServices;
-
-public class Shell32_Extract {
-
-  [DllImport(
-     "Shell32.dll",
-      EntryPoint        = "ExtractIconExW",
-      CharSet           =  CharSet.Unicode,
-      ExactSpelling     =  true,
-      CallingConvention =  CallingConvention.StdCall)
-  ]
-
-  public static extern int ExtractIconEx(
-    string lpszFile          , // Name of the .exe or .dll that contains the icon
-    int    iconIndex         , // zero based index of first icon to extract. If iconIndex == 0 and and phiconSmall == null and phiconSmall = null, the number of icons is returnd
-    out    IntPtr phiconLarge,
-    out    IntPtr phiconSmall,
-    int    nIcons
-  );
-}
-'
 
 # Build the GUI
 [xml]$XAMLformMSIProperties = @"
@@ -1286,9 +1296,14 @@ $MenuItem_Install.add_Click({
       New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Force -ErrorAction SilentlyContinue 
     }
 
-    # Set the 'icon' value under 'Get MSI Information' to a powershell.exe icon
-    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
-
+    # Set the 'icon' value under 'Get MSI Information' to a PowerShell icon
+    if ($Script:PowerShellPath) {
+      New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $Script:PowerShellPath.Path -PropertyType String -Force -ErrorAction SilentlyContinue
+    }
+    else {
+      New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
+    }
+   
     # Check if the 'command' subkey exists under 'Get MSI Information', if not, create it.
     if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command") -ne $true) {
       New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Force -ErrorAction SilentlyContinue 
@@ -1298,7 +1313,7 @@ $MenuItem_Install.add_Click({
     New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name '(default)' -Value "$RightClickMenuName" -PropertyType String -Force -ea SilentlyContinue;
 
     # Set the default value of the 'command' key to execute a PowerShell script with the .msi file as an argument.
-    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Name '(default)' -Value "C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command `"$($DestinationFolder.FullName)\$($SaveAsScriptName)`" -FilePath '%1'" -PropertyType String -Force -ErrorAction SilentlyContinue;
+    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Name '(default)' -Value "C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -Command `"$($DestinationFolder.FullName)\$($SaveAsScriptName)`" -FilePath '%1'" -PropertyType String -Force -ErrorAction SilentlyContinue;
     Write-Host "Installation Complete"
   })
 
@@ -1403,6 +1418,12 @@ foreach ($Button in $Buttons) {
 }
 
 #endregion Event Handlers
+
+# Set the PowerShell Window Title
+$Host.UI.RawUI.WindowTitle = "MSI Properties"
+
+# Relaunch the script in PowerShell 7.4 or higher if avaialble
+Invoke-LaunchAsPwsh
 
 #Show the WPF Window
 $formMSIProperties.WindowStartupLocation = "CenterScreen"
