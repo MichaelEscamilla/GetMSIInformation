@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.1.5.0
+.VERSION 2026.1.5.1
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -31,6 +31,7 @@
 2024-10.13.0  - Added an error message when the file is locked
 2024-12.8.0   - Formatted Script for Publishing to PowerShell Gallery
 2026-1.5.0    - Added Icon extraction and export functionality. Added context menu items to open the icon temp folder and right-click menu folder.
+2026.1.5.1    - Fixed a bug when launching the script from the internet
 
 .PRIVATEDATA
 
@@ -63,7 +64,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.1.5.0"
+[System.Version]$Script:ScriptVersion = "2026.1.5.1"
 # Right-Click Menu
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
@@ -399,7 +400,8 @@ function Build-IconImageControls {
         $ToolTip.Content = "Click to Export.`nUse PowerShell 7.4 or higher for better quality."
         $ToolTip.Background = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.Colors]::LightGoldenrodYellow)
         $ToolTip.Foreground = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.Colors]::Red)
-      } else { $ToolTip.Content = "Click to Export"}
+      }
+      else { $ToolTip.Content = "Click to Export" }
       $ImageControlIcon.ToolTip = $ToolTip
       $ImageControlIcon.SetValue([System.Windows.Controls.ToolTipService]::InitialShowDelayProperty, 100)
       $ImageControlIcon.HorizontalAlignment = "Center"
@@ -595,7 +597,12 @@ function Invoke-LaunchAsPwsh {
       else {
         # Start PowerShell and run the script
         Write-Host "Relaunching script in PowerShell (pwsh.exe)..."
-        Start-Process -FilePath $Script:PowerShellPath -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File `"$PSCommandPath`" -FilePath `"$FilePath`""
+        if ($PSCommandPath -ne "") {
+          Start-Process -FilePath $Script:PowerShellPath -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File `"$PSCommandPath`" -FilePath `"$FilePath`""
+        }
+        else {
+          Start-Process -FilePath $Script:PowerShellPath -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -Command `"Invoke-Expression (Invoke-RestMethod 'https://raw.githubusercontent.com/MichaelEscamilla/GetMSIInformation/main/GetMSIInformation.ps1')`""
+        }
         Exit
       }
     }
