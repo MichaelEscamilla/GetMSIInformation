@@ -467,6 +467,9 @@ function Set-IconImageNavigation {
 
   # Set GlobalIndex
   $Script:CurrentIconIndex = $NewIndex
+
+  # Hide the 'No Icon' Label
+  $lbl_NoIcon.Visibility = "Collapsed"
     
   # Hide the current Icon
   ($Script:IconImageControlsList | Where-Object { $_.Index -eq $CurrentIndex }).Control.Visibility = "Hidden"
