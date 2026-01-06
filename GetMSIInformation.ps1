@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2025.1.5.0
+.VERSION 2026.1.5.0
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -30,7 +30,7 @@
 2024.10.4.1   - Updated the version numbering, and a sepearator in the context menu.
 2024-10.13.0  - Added an error message when the file is locked
 2024-12.8.0   - Formatted Script for Publishing to PowerShell Gallery
-2025-1.5.0    - Added Icon extraction and export functionality. Added context menu items to open the icon temp folder and right-click menu folder.
+2026-1.5.0    - Added Icon extraction and export functionality. Added context menu items to open the icon temp folder and right-click menu folder.
 
 .PRIVATEDATA
 
@@ -63,7 +63,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2025.1.5.0"
+[System.Version]$Script:ScriptVersion = "2026.1.5.0"
 # Right-Click Menu
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
