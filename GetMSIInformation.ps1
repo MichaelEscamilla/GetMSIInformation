@@ -77,6 +77,8 @@ $Script:currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Secur
 $Script:ScriptPSVersion = $PSVersionTable.PSVersion
 # Get Pwsh Path
 $Script:PowerShellPath = (Get-Command pwsh.exe -ErrorAction SilentlyContinue)
+# michaeltheadmin.com Icon
+$Script:WindowIconBase64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAcCAYAAAAAwr0iAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAB3RJTUUH6gEHAA4v7u6TmgAABJNJREFUSInllstvFXUUxz+/x8x99QmUh6CkVRcGJAhGg5aNVUADgYYo0O5cuHFl3OifoIlx7cIokJgYjMEoUHDli6YtCSZUQaKESsujt5dyobf3ztyZ33Ext423lkBtWBi/q/ne+Z3z/c45Z85c+L9DLTbB7p3dbxjPe8vFcU4bU3VhuP/osaND9xtvFyO+a9febt/3PqpWq++JUyNoJ5GKRhaSY1EGDLwehuHJr77+8p1/m0MvxoAIvkLdXEwO1d3draOQ97XWXbGLLXKfgQoHtAMOGBG5z4dRYLSJRNzJDRvXvWurAW+2tS19O9eQWbD7OI4BMMZsWEiciDB1Z3rj2bPDly3itqUzKRqbcjgnKMX9FmHBUIAIKK2Ioghit80K4kQEEaE4eYv8ZIlAktnMWEFFFSqVIOGZDAJUyuV5eTqTAYRKuVJ/v1IGFL7nsaxtKS2tTUjylLFVqORSKQq3A1a7cZ5bXgLgx+tpghVP0rVxHQCDA0MYo9nc9ULCB4fQStFV42eGzqC0ZnPXJgAGBgbxPY9nnt0OCIMDZ5i8eZPWJc01SSV1r2GIYX1zhX2P3QBgvNjKrUcfp6d3PyLC2OgYfspPOMLY2BjWGHp69wFw48Z1jLGz50dHR0mlUrz62l4EYTyfZ3xgvK4tdQY0MB1rwrIHQNkZgnKZfD6PiBCGIYIknITH2pDP5wEIghBjYvL5idr5KkDCEYJKgFL1y1ftfHn30TWPrN7dsqSJsSvXKU0WyOoqSsGdqsbZDLls0tsgDFEofD8xGIZh0lvfT3gQIMbip3MIUCqVUEqRy2YBqJRu09SQYfXDqyhM3OLq6LUjdRUIKhXan1jPi9u3UakEWCUoiYnimHQqzfFjJzDWsn3HSwAc/+YEWmt2vLI94d/+QPOf37FnZZE4NthVBoAoijEm5ovR5fzu1t69BVEUsaJtKVu3bGZqqlR3MJdroP90P57v09n5PIKj/3Q/Rls6O7cA0P/zRVZcL7PpoRJEc7a8jfipEHE+mPPz34kxhsnJWwyf+4VyuYLWGgHEOdKZDMXibaxnGR4eRgSKxdsYbRg+9ysAxZsFTOhxuZAljjVaJ8vROYc2jkJoMHO+v3UzcPXKNYrFKTzPzlZEKYUxSSln5qf2Ds/LhdomU7VlA1ib5AvDgJaWJlavWTn/DJSmp9n89FPs6d6NiHDo4GF8z+dA736mp6fRNUVXU5yPi1KIJEvo0MHDeJ5HT+8BBOHI50e4cP7C3VvgnKOpqZGOjnZEhGwuS9pP09HRztTUFAtBLpcjm02T8lN0tK9FEBobGnDO3d2AtZaRkSv09Z0CEfLjE3jW0td3iiCYMz33QMr3yY9PYGvxkCwya029AUGSOgq0tDRz6Y9LXPztIgDpdAoBPvn4038skHtBREinU1CLB/A8S9vyZbMzA2AR7Ezy1iUttLQ2L0hooZjRUkohIp5VmoEwCF8plaYfqHAdBMKgitIM2XTW/2AiX9igCmqrc87y4P4OzEBpbaoi7nu0+3C2sT07ehon3IT1PO+BGqhWM0prP+rr++zOg9T57+Avnu8eqqrmFrEAAAAASUVORK5CYII="
 
 #############################################
 ################# Functions #################
@@ -1138,6 +1140,27 @@ $XAMLformMSIProperties.SelectNodes("//*[@Name]") | ForEach-Object { Set-Variable
 
 #### Form Load #####
 $formMSIProperties.Add_Loaded({
+    try {
+      # Covert the AppIcon byte array to an Icon and set as the form icon
+      $WindowIconBitmap = [System.Windows.Media.Imaging.BitmapImage]::new()
+      $WindowIconBitmap.BeginInit()
+      $WindowIconBitmap.StreamSource = [System.IO.MemoryStream][System.Convert]::FromBase64String($Script:WindowIconBase64)
+      $WindowIconBitmap.EndInit()
+      $WindowIconBitmap.Freeze()
+      $formMSIProperties.Icon = $WindowIconBitmap
+    }
+    catch {
+      # Write the error to the host but continue on. It's an icon, who cares.
+      Write-Host "Error setting form icon: $_"
+    }
+    # Covert the AppIcon byte array to an Icon and set as the form icon
+    $WindowIconBitmap = [System.Windows.Media.Imaging.BitmapImage]::new()
+    $WindowIconBitmap.BeginInit()
+    $WindowIconBitmap.StreamSource = [System.IO.MemoryStream][System.Convert]::FromBase64String($Script:WindowIconBase64)
+    $WindowIconBitmap.EndInit()
+    $WindowIconBitmap.Freeze()
+    $formMSIProperties.Icon = $WindowIconBitmap
+
     # Check if the script is running as an administrator
     if (($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
 
