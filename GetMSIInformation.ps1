@@ -2,7 +2,7 @@
 
 .VERSION 2026.1.7.0
 
-.GUID 7f2c8d9e-4a1b-5c3d-8e6f-9a2b7c4d8e1f
+.GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
 .AUTHOR Michael Escamilla
 
@@ -34,7 +34,7 @@
 2026.1.5.1    - Fixed a bug when launching the script from the internet
 2026.1.6.0    - Fixed a bug where the 'No Icon' label would not hide
 2026.1.6.1    - Added the michaeltheadmin.com icon to the Form and Right-Click Menu
-2026.1.7.0    - Improved host output when downloading the script from GitHub
+2026.1.7.0    - Simplified console output messages during script download from GitHub
 
 .PRIVATEDATA
 
