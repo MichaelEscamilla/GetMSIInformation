@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.1.6.1
+.VERSION 2026.1.7.0
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -34,6 +34,7 @@
 2026.1.5.1    - Fixed a bug when launching the script from the internet
 2026.1.6.0    - Fixed a bug where the 'No Icon' label would not hide
 2026.1.6.1    - Added the michaeltheadmin.com icon to the Form and Right-Click Menu
+2026.1.7.0    - Simplified console output messages during script download from GitHub
 
 .PRIVATEDATA
 
@@ -66,7 +67,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.1.6.1"
+[System.Version]$Script:ScriptVersion = "2026.1.7.0"
 # Right-Click Menu
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
@@ -1303,10 +1304,10 @@ $MenuItem_Install.add_Click({
       Write-Host "PSCommandPath is not available."
       # Script URL
       $ScriptURL = "https://raw.githubusercontent.com/MichaelEscamilla/GetMSIInformation/main/GetMSIInformation.ps1"
-      Write-Host "Downloading the script from URL: [$ScriptURL]"
+      Write-Host "Downloading script: [$ScriptURL]"
       try {
         Invoke-WebRequest -Uri $ScriptURL -OutFile "$($DestinationFolder.FullName)\$($SaveAsScriptName)" -ErrorAction Stop
-        Write-Host "Script download successfully saved: [$($DestinationFolder.FullName)\$($SaveAsScriptName)]"
+        Write-Host "Script saved:       [$($DestinationFolder.FullName)\$($SaveAsScriptName)]"
       }
       catch {
         Write-Host "Failed to download the script: $_"
