@@ -1154,13 +1154,6 @@ $formMSIProperties.Add_Loaded({
       # Write the error to the host but continue on. It's an icon, who cares.
       Write-Host "Error setting form icon: $_"
     }
-    # Covert the AppIcon byte array to an Icon and set as the form icon
-    $WindowIconBitmap = [System.Windows.Media.Imaging.BitmapImage]::new()
-    $WindowIconBitmap.BeginInit()
-    $WindowIconBitmap.StreamSource = [System.IO.MemoryStream][System.Convert]::FromBase64String($Script:WindowIconBase64)
-    $WindowIconBitmap.EndInit()
-    $WindowIconBitmap.Freeze()
-    $formMSIProperties.Icon = $WindowIconBitmap
 
     # Check if the script is running as an administrator
     if (($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
@@ -1344,7 +1337,7 @@ $MenuItem_Install.add_Click({
     }
     catch {
       if ($Script:PowerShellPath) {
-        New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $IconFilePath -PropertyType String -Force -ErrorAction SilentlyContinue
+        New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $Script:PowerShellPath.Path -PropertyType String -Force -ErrorAction SilentlyContinue
       }
       else {
         New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
