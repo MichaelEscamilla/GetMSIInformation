@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.1.6.0
+.VERSION 2026.1.6.1
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -33,6 +33,7 @@
 2026-1.5.0    - Added Icon extraction and export functionality. Added context menu items to open the icon temp folder and right-click menu folder.
 2026.1.5.1    - Fixed a bug when launching the script from the internet
 2026.1.6.0    - Fixed a bug where the 'No Icon' label would not hide
+2026.1.6.1    - Added the michaeltheadmin.com icon to the Form and Right-Click Menu
 
 .PRIVATEDATA
 
@@ -65,7 +66,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.1.6.0"
+[System.Version]$Script:ScriptVersion = "2026.1.6.1"
 # Right-Click Menu
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
@@ -77,6 +78,8 @@ $Script:currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Secur
 $Script:ScriptPSVersion = $PSVersionTable.PSVersion
 # Get Pwsh Path
 $Script:PowerShellPath = (Get-Command pwsh.exe -ErrorAction SilentlyContinue)
+# michaeltheadmin.com Icon
+$Script:WindowIconBase64 = "AAABAAEAIBwAAAEAIACYDgAAFgAAACgAAAAgAAAAOAAAAAEAIAAAAAAAcA4AAMQOAADEDgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABaSFoNRkZGEUtLSxBLS0sQS0tLEEtLSxBLS0sQS0tLEEtLSxBLS0sQS0tLEEtLSxBLS0sQS0tLEEtLSxBLS0sQS0tLEEtLSxBLS0sQS0tLEEtLSxBLS0sQS0tLEEtLSxBLS0sQS0tLEFRGRhFaSEgNAAAAAAAAAABUVFQLUkxPrFNOUOlRTE7tUUxO7FFMTuxRTE7sUUxO7FFMTuxRTE7sUUxO7FFMTuxRTE7sUUxO7FFMTuxRTE7sUUxO7FFMTuxRTE7sUUxO7FFMTuxRTE7sUUxO7FFMTuxRTE7sUUxO7FFMTuxRTE7sUUxO7VROUOhSTU+qTExMCU5KTH5lYWP/bm1t/25tbf9ubW3/bm1t/25tbf9ubW3/bm1t/25tbf9ubW3/bm1t/25tbf9ubW3/bm1t/25tbf9ubW3/bm1t/25tbf9ubW3/bm1t/25tbf9ubW3/bm1t/25tbf9ubW3/bm1t/25tbf9ubW3/bmxt/2RfYf9OSkx6TkhLtWtoaf94eHj/dnZ2/3V1df91dXX/dXV1/3V1df91dXX/dXV1/3V1df91dXX/dXV1/3V1df91dXX/dXV1/3V1df91dXX/dXV1/3V1df91dXX/dXV1/3V1df91dXX/dXV1/3V1df91dXX/dXV1/3Z2dv94eHj/aWZn/05IS69OSUuxamdo/3h4eP9mZGX/Uk1P/05JS/9OSUv/VVFT/1VRUv9OSUv/T0pM/09KTP9PSkz/T0pM/09KTP9PSkz/T0pM/09KTP9PSkz/T0pM/09KTP9PSkz/TklL/1VRU/9VUVP/TklL/05JS/9STlD/ZmRl/3h4eP9oZWb/T0lMqk9JTLBqZ2j/eHl4/1dUVf90cHH/rqys/62rrP9rZ2j/b2tt/66srP+npaX/p6Wl/6elpf+npaX/p6Wl/6elpf+npaX/p6Wl/6elpf+npaX/p6Wl/6elpf+tq6z/a2do/29rbP+urKz/rays/3Bsbv9YVVb/eHl5/2hlZv9PSUyqT0lMsGpnaP94eXj/U1BR/5GPkP/09PT/8/Pz/399ff+Hg4X/9PT0/+jo6P/o6Oj/6Ojo/+jo6P/o6Oj/6Ojo/+jo6P/o6Oj/6Ojo/+jo6P/o6Oj/6Ojo//Pz8/9/fX3/hoOE//T09P/z9PP/i4iJ/1VRUv94eXn/aGVm/09JTKpPSUywamdo/3h5eP9VUlP/hIGC/9PS0v/S0dH/dXJz/3t3ef/T0tL/ycjI/8rJyv/Kycr/ycjI/8nIyP/Kycr/ysnK/8nIyP/JyMj/ysnK/8vKyf/Lycj/1NLR/3dzc/98eHj/1dPS/9TT0f9/fHz/V1NU/3h5ef9oZWb/T0lMqk9JTLBqZ2j/eHl4/19cXv9TTU//V1JU/1dSVP9TTlD/VE9R/1dSVP9XUlT/V1NV/1dTVf9XUlT/V1JU/1dTVf9XU1X/V1JU/1dSVP9XU1X/WFNU/1hSVP9ZU1T/VU9Q/1VPUP9ZU1T/WVNU/1JNTv9gXV7/eHl5/2hlZv9PSUyqT0lMsGpnaP94eXj/V1NV/3x4ef/Hx8j/v76//8HAwf/BwMD/v76//8jHx/9ybnD/dnN0/8jIyP/Ix8f/cm9w/3Vxc//Ix8j/yMfI/4B2cP85VYL/LXrf/y933P8xed7/MXne/y933P8tet7/Q1p//2NaU/94eXn/aGVm/09JTKpPSUywamdo/3h5eP9UUFL/jImK//L09P/n6Oj/5+jo/+fo6P/n6Oj/8/Pz/4B9f/+Gg4T/9PT0//L08/+Afn//hICC//L09P/y9PT/k4h//zRblv8jjf//J4n//yeJ//8nif//J4n//yON//9AYJL/Y1lQ/3h5ef9oZWb/T0lMqk9JTLBqZ2j/eHl4/1hUVv95dHP/v7u3/7izr/+3tLP/tLO0/7GwsP+5t7j/cGxu/3Rwcf+5uLj/ubi4/3Bsbv9ybnD/ubi4/7m4uP98c27/PVV9/y5zzf8xcMr/NHTO/zR0zv8xcMr/LnPN/0RXef9jWlX/eHl5/2hlZv9PSUyqT0lMsGpnaP94eXj/YFxd/01LUv9ITVz/SE5d/0pJUP9TTU7/XFdZ/1tXWf9VUVL/VlFT/1tXWf9bV1n/VVFT/1ZRU/9cV1n/XFdZ/1VQU/9ZU1L/ZFtY/2RbV/9ZUEz/WlFN/2RbWP9kW1j/VlBQ/19cXv94eXn/aGVm/09JTKpPSUywamdo/3h5eP9jWFH/QF+Q/ymE+f8phPn/OFiJ/4yCe//e3t7/3d3d/3p2eP9/fH3/3t7e/93e3f96d3j/fXl7/93e3v/d3t7/fXp7/4B9fv/f3t7/3t3d/3p2d/9/fH3/397e/97e3f+DgIH/VlJT/3h5ef9oZWb/T0lMqk9JTLBqZ2j/eHl4/2NYT/8+Ypr/JI3//ySN//81WpL/lYuC//Pz8//y8vL/gHx+/4aDhP/z8/P/8vPy/4B9fv+DgIL/8vPz//Lz8/+DgYL/h4SF//Pz8//y8vL/f3x9/4aDhP/z8/P/8vPy/4qIiP9VUVL/eHl5/2hlZv9PSUyqT0lMsGpnaP94eXj/YFhV/0ZTbv87aaj/O2mo/0NRbP9waGX/m5iZ/5uYmf9mYWP/aGRm/5uYmf+bmJn/ZmJj/2djZf+bmJn/m5iZ/2djZf9pZWb/m5iZ/5uYmf9lYWL/amZo/6Cdnv+fnZ7/a2Zo/1lVV/94eXn/aGVm/09JTKpOSUuxamdo/3d4eP9nZmj/XFVT/2BUTP9gVEz/X1hV/1dUVv9QTE7/UExO/1lVV/9ZVVb/UExO/1BMTv9ZVVf/WVVW/1BMTv9QTE7/WVVW/1hVVv9QTE7/UExO/1lVV/9ZVVb/UE1O/1FNTv9WUlT/aWdo/3d4eP9oZWb/TkhLq09JTLNraGn/eHl5/3d3d/93eHj/d3h3/3d4d/93eHf/d3h3/3d4d/93eHf/d3h3/3d4d/93eHf/d3h3/3d4d/93eHf/d3h3/3d4d/93eHf/d3h3/3d4d/93eHf/d3h3/3d4d/93eHf/d3h3/3d4eP93d3f/eHl4/2hmZ/9OSEuuUUpMbWRfYf9ta2z/bWts/21rbP9ta2z/bWts/21rbP9ta2z/bWts/21rbP9ta2z/bWts/21rbP9ta2z/amhp/2poaf9ta2z/bWts/21rbP9ta2z/bWts/21rbP9ta2z/bWts/21rbP9ta2z/bWts/21rbP9samv/Yl1f/1BLS2hRUVECUUtNjFNNT89QS0zTUEpM01BKTNNQSkzTUEpM01BKTNNQSkzTUEpM01BKTNNQSkzTUEpM01BLTdFQS03yUEtN8FBLTdFQSkzTUEpM01BKTNNQSkzTUEpM01BKTNNQSkzTUEpM01BKTNNQSkzTUEtM01NNT89RTE6IfHx8AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFNMT7lTTVCmAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAU01Qs1JNT7gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABTTU1RWFNV/1NOUIhUTE9pVFBSaExMTBYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABRTE9mVlFS11NOUOJWUVLdUEtQNQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////wAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//n////5////+B////wf///////////8="
 
 #############################################
 ################# Functions #################
@@ -1138,6 +1141,20 @@ $XAMLformMSIProperties.SelectNodes("//*[@Name]") | ForEach-Object { Set-Variable
 
 #### Form Load #####
 $formMSIProperties.Add_Loaded({
+    try {
+      # Covert the AppIcon byte array to an Icon and set as the form icon
+      $WindowIconBitmap = [System.Windows.Media.Imaging.BitmapImage]::new()
+      $WindowIconBitmap.BeginInit()
+      $WindowIconBitmap.StreamSource = [System.IO.MemoryStream][System.Convert]::FromBase64String($Script:WindowIconBase64)
+      $WindowIconBitmap.EndInit()
+      $WindowIconBitmap.Freeze()
+      $formMSIProperties.Icon = $WindowIconBitmap
+    }
+    catch {
+      # Write the error to the host but continue on. It's an icon, who cares.
+      Write-Host "Error setting form icon: $_"
+    }
+
     # Check if the script is running as an administrator
     if (($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
 
@@ -1257,7 +1274,7 @@ $MenuItem_Install.add_Click({
     $SaveAsScriptName = $ScriptName
 
     # Create a new directory in the LOCALAPPDATA folder
-    Write-Host "Creating GetMSIInformation folder in LOCALAPPDATA folder"
+    Write-Host "Creating Folder:    [$($Script:RightClickMenuFolderPath)]"
     $DestinationFolderPath = "$($Script:RightClickMenuFolderPath)"
     if (-not (Test-Path $DestinationFolderPath)) {
       $DestinationFolder = New-Item -ItemType Directory -Path $DestinationFolderPath -ErrorAction SilentlyContinue
@@ -1266,10 +1283,20 @@ $MenuItem_Install.add_Click({
       $DestinationFolder = Get-Item -Path $DestinationFolderPath
     }
 
+    # Create an ico file from $Script:WindowIconBase64
+    $IconFilePath = "$($DestinationFolder.FullName)\GetMSIInformation.ico"
+
+    # Delete existing Icon file if it exists
+    Remove-Item $IconFilePath -Force -ErrorAction SilentlyContinue | Out-Null
+
+    Write-Host "Creating Icon file: [$IconFilePath]"
+    $IconByteArray = [System.Convert]::FromBase64String($Script:WindowIconBase64)
+    [System.IO.File]::WriteAllBytes($IconFilePath, $IconByteArray)
+
     # Check if the script is being Invoked from the Internet
     if ($PSCommandPath -ne "") {
       # Copy the script to the new directory
-      Write-Host "Copying Script to GetMSIInfo Folder"
+      Write-Host "Creating Script:    [$($DestinationFolder.FullName)\$($SaveAsScriptName)]"
       Copy-Item "$PSScriptRoot\$([System.IO.Path]::GetFileName($PSCommandPath))" -Destination "$($DestinationFolder.FullName)\$($SaveAsScriptName)" -ErrorAction SilentlyContinue
     }
     else {
@@ -1279,7 +1306,7 @@ $MenuItem_Install.add_Click({
       Write-Host "Downloading the script from URL: [$ScriptURL]"
       try {
         Invoke-WebRequest -Uri $ScriptURL -OutFile "$($DestinationFolder.FullName)\$($SaveAsScriptName)" -ErrorAction Stop
-        Write-Host "Script downloaded successfully saved: [$($DestinationFolder.FullName)\$($SaveAsScriptName)]"
+        Write-Host "Script download successfully saved: [$($DestinationFolder.FullName)\$($SaveAsScriptName)]"
       }
       catch {
         Write-Host "Failed to download the script: $_"
@@ -1304,12 +1331,17 @@ $MenuItem_Install.add_Click({
       New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Force -ErrorAction SilentlyContinue 
     }
 
-    # Set the 'icon' value under 'Get MSI Information' to a PowerShell icon
-    if ($Script:PowerShellPath) {
-      New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $Script:PowerShellPath.Path -PropertyType String -Force -ErrorAction SilentlyContinue
+    # Set the 'icon' value under 'Get MSI Information'
+    try {
+      New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $IconFilePath -PropertyType String -Force -ErrorAction SilentlyContinue
     }
-    else {
-      New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
+    catch {
+      if ($Script:PowerShellPath) {
+        New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $Script:PowerShellPath.Path -PropertyType String -Force -ErrorAction SilentlyContinue
+      }
+      else {
+        New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
+      }
     }
    
     # Check if the 'command' subkey exists under 'Get MSI Information', if not, create it.
@@ -1322,27 +1354,23 @@ $MenuItem_Install.add_Click({
 
     # Set the default value of the 'command' key to execute a PowerShell script with the .msi file as an argument.
     New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Name '(default)' -Value "C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -Command `"$($DestinationFolder.FullName)\$($SaveAsScriptName)`" -FilePath '%1'" -PropertyType String -Force -ErrorAction SilentlyContinue;
+    Write-Host "Registry Modified:  [HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$($RightClickMenuName)]"
     Write-Host "Installation Complete"
   })
 
 $MenuItem_Uninstall.add_Click({
     Write-Host "Menu Item Uninstall Clicked"
-    Write-Output "Removing Script from LOCALAPPDATA"
 
     # Remove the script folder from the LOCALAPPDATA folder
     Remove-item "$env:LOCALAPPDATA\GetMSIInformation" -Force -Recurse -ErrorAction SilentlyContinue
+    Write-Host "Deleted Folder:   [$env:LOCALAPPDATA\GetMSIInformation]"
 
-    # Reg2CI (c) 2020 by Roger Zander
-    # https://github.com/asjimene/GetMSIInfo/blob/master/GetMSIInfo.ps1
-
-
-    Write-Output "Cleaning Up Registry"
     # Remove the 'Get MSI Information' registry key if it exists
     if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName") -eq $true) { 
       Remove-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -force -Recurse -ea SilentlyContinue 
     }
-
-    Write-Output "Uninstallation Complete!"
+    Write-Host "Deleted Registry: [HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$($RightClickMenuName)]"
+    Write-Host "Uninstallation Complete"
   })
 
 $MenuItem_Open_RCM.add_Click({
