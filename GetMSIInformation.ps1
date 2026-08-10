@@ -156,6 +156,34 @@ function Get-MsiProperties {
   $Properties
 }
 
+# Stolen from: https://github.com/codaamok
+# https://gist.github.com/codaamok/7ed30d01280ce28bb451621966707c1b
+function Convert-ProductCodeToCompressedGuid {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ProductCode
+  )
+
+  function Get-ReversedString ([array]$a) {
+    [String]::Join('', $a[-1..-($a.Count)])
+  }
+
+  function Get-ReversedBytes ([String]$a) {
+    [String]::Join('', ($a -split '(..)' -ne '' -replace '(\w)(\w)', '$2$1'))
+  }
+
+  # Strip braces and dashes from the GUID
+  $ProductCode = $ProductCode -replace '\{|\}|\-'
+
+  $data1 = Get-ReversedString $ProductCode[0..7]
+  $data2 = Get-ReversedString $ProductCode[8..11]
+  $data3 = Get-ReversedString $ProductCode[12..15]
+  $data4 = Get-ReversedBytes ($ProductCode[16..19] -join '')
+  $data5 = Get-ReversedBytes ($ProductCode[20..31] -join '')
+
+  return '{0}{1}{2}{3}{4}' -f $data1, $data2, $data3, $data4, $data5
+}
+
 function Enable-AllButtons {
   param (
     [Parameter(Mandatory = $false)]
@@ -230,6 +258,10 @@ function Get-FileHashInformation {
   # Get File Hash - SHA1 - Encoded
   $FileHashEncoded = Get-EncodedHash -HashValue $FileHashSHA1
   $Hashes["Digest"] = $FileHashEncoded
+
+  # Get File Hash - SHA256 - Encoded
+  $FileHashSHA256Encoded = Get-EncodedHash -HashValue $FileHashSHA256
+  $Hashes["D256"] = $FileHashSHA256Encoded
 
   # Return the hash object
   $Hashes
@@ -348,11 +380,17 @@ function Set-TextboxInformation {
   $txt_ProductCode.Text = $MSIPropertiesInfo.ProductCode
   $txt_UpgradeCode.Text = $MSIPropertiesInfo.UpgradeCode
 
+  # Set the Compressed GUID from the Product Code
+  if ($MSIPropertiesInfo.ProductCode) {
+    $txt_CompressedGUID.Text = Convert-ProductCodeToCompressedGuid -ProductCode $MSIPropertiesInfo.ProductCode
+  }
+
   # Set the File Hash Information textboxes
   $txt_MD5.Text = $FileHashInfo.MD5.Hash
   $txt_SHA1.Text = $FileHashInfo.SHA1.Hash
   $txt_SHA256.Text = $FileHashInfo.SHA256.Hash
   $txt_Digest.Text = $FileHashInfo.Digest
+  $txt_D256.Text = $FileHashInfo.D256
 }
 
 function Build-IconImageControls {
@@ -636,7 +674,7 @@ Add-Type -AssemblyName System.Windows.Forms
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   Name="form1"
   Width="900"
-  Height="425"
+  Height="489"
   ResizeMode="NoResize"
   Title="MSI Properties"
   FontSize="12">
@@ -773,6 +811,7 @@ Add-Type -AssemblyName System.Windows.Forms
           <RowDefinition Height="32"/>
           <RowDefinition Height="32"/>
           <RowDefinition Height="32"/>
+          <RowDefinition Height="32"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
@@ -898,7 +937,7 @@ Add-Type -AssemblyName System.Windows.Forms
           Grid.Row="3"
           Grid.Column="0"
           Name="lbl_Digest"
-          Content="Digest"/>
+          Content="Digest-1"/>
         <TextBox
           Grid.Row="3"
           Grid.Column="1"
@@ -908,6 +947,24 @@ Add-Type -AssemblyName System.Windows.Forms
           Grid.Row="3"
           Grid.Column="2"
           Name="btn_Digest_Copy"
+          Content="Copy"/>
+
+        <!-- Row 4 -->
+        <!-- D-256 -->
+        <Label
+          Grid.Row="4"
+          Grid.Column="0"
+          Name="lbl_D256"
+          Content="Digest-256"/>
+        <TextBox
+          Grid.Row="4"
+          Grid.Column="1"
+          Name="txt_D256"
+          xml:space="preserve"/>
+        <Button
+          Grid.Row="4"
+          Grid.Column="2"
+          Name="btn_D256_Copy"
           Content="Copy"/>
       </Grid>
 
@@ -933,10 +990,11 @@ Add-Type -AssemblyName System.Windows.Forms
           <RowDefinition Height="32"/>
           <RowDefinition Height="32"/>
           <RowDefinition Height="32"/>
+          <RowDefinition Height="32"/>
           <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="100"/>
+          <ColumnDefinition Width="105"/>
           <ColumnDefinition Width="*"/>
           <ColumnDefinition Width="75"/>
         </Grid.ColumnDefinitions>
@@ -1082,28 +1140,45 @@ Add-Type -AssemblyName System.Windows.Forms
         <Label
           Grid.Row="4"
           Grid.Column="0"
+          Name="lbl_CompressedGUID"
+          Content="Comp Prod Code"/>
+        <TextBox
+          Grid.Row="4"
+          Grid.Column="1"
+          Name="txt_CompressedGUID"
+          xml:space="preserve"/>
+        <Button
+          Grid.Row="4"
+          Grid.Column="2"
+          Name="btn_CompressedGUID_Copy"
+          Content="Copy"/>
+
+        <!-- Row -->
+        <Label
+          Grid.Row="5"
+          Grid.Column="0"
           Name="lbl_UpgradeCode"
           Content="Upgrade Code"/>
         <TextBox
-          Grid.Row="4"
+          Grid.Row="5"
           Grid.Column="1"
           Name="txt_UpgradeCode"
           xml:space="preserve"/>
         <Button
-          Grid.Row="4"
+          Grid.Row="5"
           Grid.Column="2"
           Name="btn_UpgradeCode_Copy"
           Content="Copy"/>
 
         <!-- Row -->
         <Button
-          Grid.Row="5"
+          Grid.Row="6"
           Grid.Column="0"
           Name="btn_AllProperties"
           Content="All Properties"
           IsEnabled="False"/>
         <ListBox
-          Grid.Row="5"
+          Grid.Row="6"
           Grid.Column="1"
           Name="lsbox_FilePath"
           AllowDrop="True"
@@ -1116,7 +1191,7 @@ Add-Type -AssemblyName System.Windows.Forms
           </ListBox.Items>
         </ListBox>
         <Button
-          Grid.Row="5"
+          Grid.Row="6"
           Grid.Column="2"
           Name="btn_FilePath_Copy"
           Content="Copy"/>
