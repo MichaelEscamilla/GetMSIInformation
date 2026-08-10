@@ -367,22 +367,24 @@ function Get-MsiIcon {
 
 function Set-TextboxInformation {
   param (
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [System.Object]$MSIPropertiesInfo,
     [Parameter(Mandatory = $true)]
     [hashtable]$FileHashInfo
   )
 
-  # Set the MSI file properties textboxes
-  $txt_ProductName.Text = $MSIPropertiesInfo.ProductName
-  $txt_Manufacture.Text = $MSIPropertiesInfo.Manufacturer
-  $txt_ProductVersion.Text = $MSIPropertiesInfo.ProductVersion
-  $txt_ProductCode.Text = $MSIPropertiesInfo.ProductCode
-  $txt_UpgradeCode.Text = $MSIPropertiesInfo.UpgradeCode
+  # Set the MSI file properties textboxes (only when MSI properties are provided)
+  if ($MSIPropertiesInfo) {
+    $txt_ProductName.Text = $MSIPropertiesInfo.ProductName
+    $txt_Manufacture.Text = $MSIPropertiesInfo.Manufacturer
+    $txt_ProductVersion.Text = $MSIPropertiesInfo.ProductVersion
+    $txt_ProductCode.Text = $MSIPropertiesInfo.ProductCode
+    $txt_UpgradeCode.Text = $MSIPropertiesInfo.UpgradeCode
 
-  # Set the Compressed GUID from the Product Code
-  if ($MSIPropertiesInfo.ProductCode) {
-    $txt_CompressedGUID.Text = Convert-ProductCodeToCompressedGuid -ProductCode $MSIPropertiesInfo.ProductCode
+    # Set the Compressed GUID from the Product Code
+    if ($MSIPropertiesInfo.ProductCode) {
+      $txt_CompressedGUID.Text = Convert-ProductCodeToCompressedGuid -ProductCode $MSIPropertiesInfo.ProductCode
+    }
   }
 
   # Set the File Hash Information textboxes
@@ -601,23 +603,37 @@ function Invoke-GetMSIInformation {
   # Reset the form
   Invoke-FormReset
 
-  # Get the MSI file properties
-  $FileMSIInfo = Get-MsiProperties -Path $MSIPath
-
-  # Get the File Hash Information
+  # Get the File Hash Information for any file type
   $HashInfo = Get-FileHashInformation -Path $MSIPath
 
-  # Populate the textboxes
-  Set-TextboxInformation -MSIPropertiesInfo $FileMSIInfo -FileHashInfo $HashInfo
+  # Check if the file is an MSI file
+  $IsMSI = ([System.IO.Path]::GetExtension($MSIPath[0])) -eq ".msi"
 
-  # Extract and display the Icons
-  $IconObjects = Get-MsiIcon -Path $MSIPath
-  if ($null -ne $IconObjects) {
-    Set-IconImage -IconObjects $IconObjects
+  if ($IsMSI) {
+    # Get the MSI file properties
+    $FileMSIInfo = Get-MsiProperties -Path $MSIPath
+
+    # Populate the textboxes with the MSI properties and hash information
+    Set-TextboxInformation -MSIPropertiesInfo $FileMSIInfo -FileHashInfo $HashInfo
+
+    # Extract and display the Icons
+    $IconObjects = Get-MsiIcon -Path $MSIPath
+    if ($null -ne $IconObjects) {
+      Set-IconImage -IconObjects $IconObjects
+    }
+
+    # Enable the Copy buttons
+    Enable-AllButtons -Exclude "Icon"
   }
+  else {
+    # Populate only the hash textboxes for non-MSI files
+    Set-TextboxInformation -FileHashInfo $HashInfo
 
-  # Enable the Copy buttons
-  Enable-AllButtons -Exclude "Icon"
+    # Enable only the Hash and FilePath Copy buttons
+    foreach ($ButtonName in @("btn_MD5_Copy", "btn_SHA1_Copy", "btn_SHA256_Copy", "btn_Digest_Copy", "btn_D256_Copy", "btn_FilePath_Copy")) {
+      (Get-Variable -Name $ButtonName -ValueOnly -ErrorAction SilentlyContinue).IsEnabled = $true
+    }
+  }
 
   # Clear the listbox and add the filename
   $lsbox_FilePath.Items.Clear()
@@ -1186,7 +1202,7 @@ Add-Type -AssemblyName System.Windows.Forms
           TabIndex="0">
           <ListBox.Items>
             <ListBoxItem>
-              <TextBlock Text="Drag and drop files here - *.msi"/>
+              <TextBlock Text="Drag and drop any file here - hashes for all, properties for *.msi"/>
             </ListBoxItem>
           </ListBox.Items>
         </ListBox>
@@ -1312,17 +1328,8 @@ $lsbox_FilePath.Add_Drop({
 $lsbox_FilePath.Add_DragOver({
     # Check if the dragged data contains file drop data
     if ($_.Data.GetDataPresent([Windows.Forms.DataFormats]::FileDrop)) {
-      foreach ($File in $_.Data.GetData([Windows.Forms.DataFormats]::FileDrop)) {
-        # Check if the file is an MSI file
-        if (([System.IO.Path]::GetExtension($File)) -eq ".msi") {
-          # Set the drag effect to Copy if the file is an MSI file
-          $_.Effects = [System.Windows.DragDropEffects]::Copy
-        }
-        else {
-          # Set the drag effect to None if the file is not an MSI file
-          $_.Effects = [System.Windows.DragDropEffects]::None
-        }
-      }
+      # Allow any file type to be dropped
+      $_.Effects = [System.Windows.DragDropEffects]::Copy
       $_.Handled = $true
     }
   })
