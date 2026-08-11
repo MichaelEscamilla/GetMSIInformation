@@ -716,7 +716,7 @@ Add-Type -AssemblyName System.Windows.Forms
     <!-- Menu item templates -->
     <ControlTemplate x:Key="MenuTopLevelHeader" TargetType="MenuItem">
       <Grid>
-        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Margin="2,0" Padding="10,4">
+        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{StaticResource Accent}" BorderThickness="1" CornerRadius="6" Margin="2,0" Padding="10,4">
           <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
         </Border>
         <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsSubmenuOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
@@ -730,21 +730,24 @@ Add-Type -AssemblyName System.Windows.Forms
       </Grid>
       <ControlTemplate.Triggers>
         <Trigger Property="IsHighlighted" Value="True">
-          <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
+          <Setter TargetName="Bd" Property="Background" Value="{StaticResource Accent}"/>
+          <Setter Property="Foreground" Value="{StaticResource AccentText}"/>
         </Trigger>
         <Trigger Property="IsSubmenuOpen" Value="True">
-          <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
+          <Setter TargetName="Bd" Property="Background" Value="{StaticResource Accent}"/>
+          <Setter Property="Foreground" Value="{StaticResource AccentText}"/>
         </Trigger>
       </ControlTemplate.Triggers>
     </ControlTemplate>
 
     <ControlTemplate x:Key="MenuTopLevelItem" TargetType="MenuItem">
-      <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Margin="2,0" Padding="10,4">
+      <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{StaticResource Accent}" BorderThickness="1" CornerRadius="6" Margin="2,0" Padding="10,4">
         <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
       </Border>
       <ControlTemplate.Triggers>
         <Trigger Property="IsHighlighted" Value="True">
-          <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
+          <Setter TargetName="Bd" Property="Background" Value="{StaticResource Accent}"/>
+          <Setter Property="Foreground" Value="{StaticResource AccentText}"/>
         </Trigger>
       </ControlTemplate.Triggers>
     </ControlTemplate>
