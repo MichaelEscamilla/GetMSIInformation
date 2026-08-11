@@ -1927,8 +1927,17 @@ $formMSIProperties.Add_Loaded({
       }
       else {
         Write-Host "FilePath passed: [$FilePath]"
-        # Get MSI Information
-        Invoke-GetMSIInformation -MSIPath $FilePath
+
+        # Show the UI
+        $lsbox_FilePath.Items.Clear()
+        $lsbox_FilePath.Items.Add("Loading: [$FilePath]")
+        $txtblk_StatusBar.Text = "Processing file..."
+
+        # Process the File
+        $formMSIProperties.Dispatcher.InvokeAsync({
+            Invoke-GetMSIInformation -MSIPath $FilePath
+            $txtblk_StatusBar.Text = "Created By Michael Escamilla"
+          }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
       }
     }
   })
@@ -2074,8 +2083,17 @@ $MenuItem_Install.add_Click({
     # Set the default value of the 'Get MSI Information' key to "Get MSI Information".
     New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name '(default)' -Value "$RightClickMenuName" -PropertyType String -Force -ea SilentlyContinue;
 
+    # Prefer pwsh 7.4+ so the menu launches directly and skips the slow relaunch.
+    # Fall back to Windows PowerShell (always present) when pwsh isn't installed.
+    if ($Script:PowerShellPath -and $Script:PowerShellPath.Version -ge [Version]"7.4") {
+      $CommandExe = $Script:PowerShellPath.Path
+    }
+    else {
+      $CommandExe = "C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe"
+    }
+
     # Set the default value of the 'command' key to execute a PowerShell script with the .msi file as an argument.
-    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Name '(default)' -Value "C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -Command `"$($DestinationFolder.FullName)\$($SaveAsScriptName)`" -FilePath '%1'" -PropertyType String -Force -ErrorAction SilentlyContinue;
+    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Name '(default)' -Value "`"$CommandExe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -Command `"$($DestinationFolder.FullName)\$($SaveAsScriptName)`" -FilePath '%1'" -PropertyType String -Force -ErrorAction SilentlyContinue;
     Write-Host "Registry Modified:  [HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$($RightClickMenuName)]"
     Write-Host "Installation Complete"
   })
