@@ -690,14 +690,14 @@ Add-Type -AssemblyName System.Windows.Forms
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   Name="form1"
   Width="920"
-  Height="560"
+  Height="620"
   ResizeMode="NoResize"
   WindowStyle="None"
   AllowsTransparency="True"
   Background="Transparent"
   Title="MSI Properties"
   FontFamily="Segoe UI"
-  FontSize="12">
+  FontSize="14">
 
   <Window.Resources>
     <!-- Color tokens (michaeltheadmin.com palette) -->
@@ -1052,7 +1052,7 @@ Add-Type -AssemblyName System.Windows.Forms
           <Button Name="titlebar_Minimize" DockPanel.Dock="Right" Style="{StaticResource TitleBarButton}" Content="&#xE921;"/>
           <Image DockPanel.Dock="Left" Margin="14,0,0,0" Width="20" Height="20" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
           <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,8,0">
-            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text}" Text="MSI Properties" VerticalAlignment="Center"/>
+            <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Text}" Text="MSI Properties" VerticalAlignment="Center"/>
             <TextBlock Name="txtblk_TitleVersion" FontWeight="Normal" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="6,0,0,1"/>
           </StackPanel>
           <Menu VerticalAlignment="Center">
@@ -1073,7 +1073,7 @@ Add-Type -AssemblyName System.Windows.Forms
         </DockPanel>
       </Border>
       <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}" Height="24" CornerRadius="0,0,11,11">
-        <TextBlock Name="txtblk_StatusBar" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="12,0" Text="Created By Michael Escamilla"/>
+        <TextBlock Name="txtblk_StatusBar" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" FontSize="12" Margin="12,0" Text="Created By Michael Escamilla"/>
       </Border>
 
     <Grid>
@@ -1160,12 +1160,12 @@ Add-Type -AssemblyName System.Windows.Forms
         Grid.Row="0"
         Grid.Column="2">
         <Grid.RowDefinitions>
-          <RowDefinition Height="22"/>
-          <RowDefinition Height="32"/>
-          <RowDefinition Height="32"/>
-          <RowDefinition Height="32"/>
-          <RowDefinition Height="32"/>
-          <RowDefinition Height="32"/>
+          <RowDefinition Height="26"/>
+          <RowDefinition Height="36"/>
+          <RowDefinition Height="36"/>
+          <RowDefinition Height="36"/>
+          <RowDefinition Height="36"/>
+          <RowDefinition Height="36"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
@@ -1288,13 +1288,13 @@ Add-Type -AssemblyName System.Windows.Forms
         Grid.Column="0"
         Grid.ColumnSpan="3">
         <Grid.RowDefinitions>
-          <RowDefinition Height="22"/>
-          <RowDefinition Height="32"/>
-          <RowDefinition Height="32"/>
-          <RowDefinition Height="32"/>
-          <RowDefinition Height="32"/>
-          <RowDefinition Height="32"/>
-          <RowDefinition Height="32"/>
+          <RowDefinition Height="26"/>
+          <RowDefinition Height="36"/>
+          <RowDefinition Height="36"/>
+          <RowDefinition Height="36"/>
+          <RowDefinition Height="36"/>
+          <RowDefinition Height="36"/>
+          <RowDefinition Height="36"/>
           <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
@@ -1306,6 +1306,8 @@ Add-Type -AssemblyName System.Windows.Forms
           <Style TargetType="Label" BasedOn="{StaticResource ThemedLabel}">
             <Setter Property="Margin"
                     Value="2.5"/>
+            <Setter Property="FontSize"
+                    Value="12"/>
             <Setter Property="HorizontalAlignment"
                     Value="Stretch"/>
             <Setter Property="HorizontalContentAlignment"
