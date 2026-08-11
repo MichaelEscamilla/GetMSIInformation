@@ -679,6 +679,9 @@ function Invoke-LaunchAsPwsh {
 ################# Main Script ################
 #############################################
 
+# Relaunch the script in PowerShell 7.4 or higher if available.
+Invoke-LaunchAsPwsh
+
 # Load Assemblies
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName System.Windows.Forms
@@ -2189,9 +2192,6 @@ foreach ($Button in $Buttons) {
 
 # Set the PowerShell Window Title
 $Host.UI.RawUI.WindowTitle = "MSI Properties"
-
-# Relaunch the script in PowerShell 7.4 or higher if avaialble
-Invoke-LaunchAsPwsh
 
 #Show the WPF Window
 $formMSIProperties.WindowStartupLocation = "CenterScreen"
