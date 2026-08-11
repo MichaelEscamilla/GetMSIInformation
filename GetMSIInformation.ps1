@@ -1051,7 +1051,10 @@ Add-Type -AssemblyName System.Windows.Forms
           <Button Name="titlebar_Close" DockPanel.Dock="Right" Style="{StaticResource TitleBarCloseButton}" Content="&#xE8BB;"/>
           <Button Name="titlebar_Minimize" DockPanel.Dock="Right" Style="{StaticResource TitleBarButton}" Content="&#xE921;"/>
           <Image DockPanel.Dock="Left" Margin="14,0,0,0" Width="20" Height="20" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
-          <TextBlock DockPanel.Dock="Left" Margin="10,0,8,0" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text}" Text="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}"/>
+          <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,8,0">
+            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text}" Text="MSI Properties" VerticalAlignment="Center"/>
+            <TextBlock Name="txtblk_TitleVersion" FontWeight="Normal" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="6,0,0,1"/>
+          </StackPanel>
           <Menu VerticalAlignment="Center">
             <MenuItem Header="File">
               <MenuItem Name="MenuItem_Open" Header="Open Icon Temp Folder"/>
@@ -1065,7 +1068,7 @@ Add-Type -AssemblyName System.Windows.Forms
               <MenuItem Name="MenuItem_GitHub" Header="GitHub - GetMSIInformation"/>
               <MenuItem Name="MenuItem_About" Header="michaeltheadmin.com"/>
               <Separator/>
-              <MenuItem Name="MenuItem_Version" Header="Version 1.0.0" IsEnabled="False"/>
+              <MenuItem Name="MenuItem_Version" Header="Version 1.0.0" IsEnabled="False" FontWeight="Normal" />
             </MenuItem>
           </Menu>
         </DockPanel>
@@ -1581,6 +1584,7 @@ $formMSIProperties.Add_Loaded({
     # Update Version Information
     $formMSIProperties.Title = "MSI Properties - Version $($ScriptVersion)"
     $MenuItem_Version.Header = "Version $($ScriptVersion)"
+    $txtblk_TitleVersion.Text = " $($ScriptVersion)"
 
     # Check if the FilePath parameter is provided to script
     if ($FilePath) {

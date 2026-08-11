@@ -365,7 +365,10 @@
           <Button Name="titlebar_Close" DockPanel.Dock="Right" Style="{StaticResource TitleBarCloseButton}" Content="&#xE8BB;"/>
           <Button Name="titlebar_Minimize" DockPanel.Dock="Right" Style="{StaticResource TitleBarButton}" Content="&#xE921;"/>
           <Image DockPanel.Dock="Left" Margin="14,0,0,0" Width="20" Height="20" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
-          <TextBlock DockPanel.Dock="Left" Margin="10,0,8,0" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text}" Text="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}"/>
+          <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,8,0">
+            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text}" Text="MSI Properties" VerticalAlignment="Center"/>
+            <TextBlock Name="txtblk_TitleVersion" FontSize="10" FontWeight="Normal" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="6,0,0,1"/>
+          </StackPanel>
           <Menu VerticalAlignment="Center">
             <MenuItem Header="File">
               <MenuItem Name="MenuItem_Open" Header="Open Icon Temp Folder"/>
@@ -379,7 +382,7 @@
               <MenuItem Name="MenuItem_GitHub" Header="GitHub - GetMSIInformation"/>
               <MenuItem Name="MenuItem_About" Header="michaeltheadmin.com"/>
               <Separator/>
-              <MenuItem Name="MenuItem_Version" Header="Version 1.0.0" IsEnabled="False"/>
+              <MenuItem Name="MenuItem_Version" Header="Version 1.0.0" IsEnabled="False" FontWeight="Normal" FontSize="10" Foreground="{StaticResource TextMuted}"/>
             </MenuItem>
           </Menu>
         </DockPanel>
