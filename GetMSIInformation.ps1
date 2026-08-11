@@ -1607,7 +1607,7 @@ Add-Type -AssemblyName System.Windows.Forms
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="105"/>
+            <ColumnDefinition Width="110"/>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="60"/>
           </Grid.ColumnDefinitions>
