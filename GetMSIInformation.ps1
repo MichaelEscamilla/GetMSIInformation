@@ -1030,7 +1030,7 @@ Add-Type -AssemblyName System.Windows.Forms
         <DockPanel LastChildFill="True">
           <Button Name="titlebar_Close" DockPanel.Dock="Right" Style="{StaticResource TitleBarCloseButton}" Content="&#xE8BB;"/>
           <Button Name="titlebar_Minimize" DockPanel.Dock="Right" Style="{StaticResource TitleBarButton}" Content="&#xE921;"/>
-          <TextBlock DockPanel.Dock="Left" Margin="14,0,0,0" VerticalAlignment="Center" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{StaticResource Accent}" Text="&#xE7B8;"/>
+          <Image DockPanel.Dock="Left" Margin="14,0,0,0" Width="20" Height="20" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
           <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text}" Text="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}"/>
         </DockPanel>
       </Border>
