@@ -355,10 +355,7 @@
     </Style>
   </Window.Resources>
 
-  <Border Background="{StaticResource Bg}" CornerRadius="12" BorderBrush="{StaticResource BorderMuted}" BorderThickness="1" Margin="12">
-    <Border.Effect>
-      <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.5" Color="#000000"/>
-    </Border.Effect>
+  <Border Background="{StaticResource Bg}" CornerRadius="12" BorderBrush="{StaticResource BorderMuted}" BorderThickness="1" Margin="0">
     <DockPanel>
       <Border Name="titlebar" DockPanel.Dock="Top" Background="{StaticResource Surface}" CornerRadius="11,11,0,0" Height="42">
         <DockPanel LastChildFill="True">
