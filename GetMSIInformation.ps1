@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.1.7.0
+.VERSION 2026.8.11.0
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -35,6 +35,9 @@
 2026.1.6.0    - Fixed a bug where the 'No Icon' label would not hide
 2026.1.6.1    - Added the michaeltheadmin.com icon to the Form and Right-Click Menu
 2026.1.7.0    - Simplified console output messages during script download from GitHub
+2026.8.11.0   - Updated UI for less 'default' look.
+                Added the Compressed Product Code (Compressed GUID) to the GUI.
+                Right-Click Install will directly call pwsh.exe if available.
 
 .PRIVATEDATA
 
@@ -67,7 +70,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.1.7.0"
+[System.Version]$Script:ScriptVersion = "2026.8.11.0"
 # Right-Click Menu
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
