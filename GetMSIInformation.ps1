@@ -716,8 +716,8 @@ Add-Type -AssemblyName System.Windows.Forms
     <!-- Menu item templates -->
     <ControlTemplate x:Key="MenuTopLevelHeader" TargetType="MenuItem">
       <Grid>
-        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="10,4">
-          <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Margin="2,0" Padding="10,4">
+          <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
         </Border>
         <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsSubmenuOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
           <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8" Padding="4" Margin="0,4,10,10">
@@ -739,8 +739,8 @@ Add-Type -AssemblyName System.Windows.Forms
     </ControlTemplate>
 
     <ControlTemplate x:Key="MenuTopLevelItem" TargetType="MenuItem">
-      <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="10,4">
-        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+      <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="6" Margin="2,0" Padding="10,4">
+        <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
       </Border>
       <ControlTemplate.Triggers>
         <Trigger Property="IsHighlighted" Value="True">
@@ -751,7 +751,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
     <ControlTemplate x:Key="MenuSubmenuItem" TargetType="MenuItem">
       <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="12,6" Margin="1">
-        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+        <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
       </Border>
       <ControlTemplate.Triggers>
         <Trigger Property="IsHighlighted" Value="True">
@@ -772,7 +772,7 @@ Add-Type -AssemblyName System.Windows.Forms
               <ColumnDefinition Width="*"/>
               <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <ContentPresenter Grid.Column="0" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+            <ContentPresenter Grid.Column="0" ContentSource="Header" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="1" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="10" VerticalAlignment="Center" Margin="16,0,0,0"/>
           </Grid>
         </Border>
@@ -914,6 +914,23 @@ Add-Type -AssemblyName System.Windows.Forms
     </Style>
     <Style TargetType="Button" BasedOn="{StaticResource ThemedButton}"/>
 
+    <!-- Icon-only copy button -->
+    <Style x:Key="CopyButton" TargetType="Button" BasedOn="{StaticResource ThemedButton}">
+      <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="Padding" Value="0"/>
+    </Style>
+
+    <!-- Muted section label -->
+    <Style x:Key="SectionHeader" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+      <Setter Property="FontSize" Value="10"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="Margin" Value="5,0,0,0"/>
+    </Style>
+
     <!-- Drag and drop list -->
     <Style x:Key="ThemedListBox" TargetType="ListBox">
       <Setter Property="Background" Value="{StaticResource Surface}"/>
@@ -1031,33 +1048,28 @@ Add-Type -AssemblyName System.Windows.Forms
           <Button Name="titlebar_Close" DockPanel.Dock="Right" Style="{StaticResource TitleBarCloseButton}" Content="&#xE8BB;"/>
           <Button Name="titlebar_Minimize" DockPanel.Dock="Right" Style="{StaticResource TitleBarButton}" Content="&#xE921;"/>
           <Image DockPanel.Dock="Left" Margin="14,0,0,0" Width="20" Height="20" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Icon, RelativeSource={RelativeSource AncestorType=Window}}"/>
-          <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text}" Text="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}"/>
+          <TextBlock DockPanel.Dock="Left" Margin="10,0,8,0" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text}" Text="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}"/>
+          <Menu VerticalAlignment="Center">
+            <MenuItem Header="File">
+              <MenuItem Name="MenuItem_Open" Header="Open Icon Temp Folder"/>
+            </MenuItem>
+            <MenuItem Header="Right Click Menu">
+              <MenuItem Name="MenuItem_Install" Header="Install"/>
+              <MenuItem Name="MenuItem_Uninstall" Header="Uninstall"/>
+              <MenuItem Name="MenuItem_Open_RCM" Header="Open Right Click Menu Folder"/>
+            </MenuItem>
+            <MenuItem Header="About">
+              <MenuItem Name="MenuItem_GitHub" Header="GitHub - GetMSIInformation"/>
+              <MenuItem Name="MenuItem_About" Header="michaeltheadmin.com"/>
+              <Separator/>
+              <MenuItem Name="MenuItem_Version" Header="Version 1.0.0" IsEnabled="False"/>
+            </MenuItem>
+          </Menu>
         </DockPanel>
       </Border>
-      <Menu DockPanel.Dock="Top">
-      <MenuItem Header="File">
-        <MenuItem Name="MenuItem_Open"
-                  Header="Open Icon Temp Folder"/>
-      </MenuItem>
-      <MenuItem Header="Right Click Menu">
-        <MenuItem Name="MenuItem_Install"
-                  Header="Install"/>
-        <MenuItem Name="MenuItem_Uninstall"
-                  Header="Uninstall"/>
-        <MenuItem Name="MenuItem_Open_RCM"
-                  Header="Open Right Click Menu Folder"/>
-      </MenuItem>
-      <MenuItem Header="About">
-        <MenuItem Name="MenuItem_GitHub"
-                  Header="GitHub - GetMSIInformation"/>
-        <MenuItem Name="MenuItem_About"
-                  Header="michaeltheadmin.com"/>
-        <Separator/>
-        <MenuItem Name="MenuItem_Version"
-                  Header="Version 1.0.0"
-                  IsEnabled="False"/>
-      </MenuItem>
-    </Menu>
+      <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}" Height="24" CornerRadius="0,0,11,11">
+        <TextBlock Name="txtblk_StatusBar" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="12,0" Text="Created By Michael Escamilla"/>
+      </Border>
 
     <Grid>
       <Grid.RowDefinitions>
@@ -1143,6 +1155,7 @@ Add-Type -AssemblyName System.Windows.Forms
         Grid.Row="0"
         Grid.Column="2">
         <Grid.RowDefinitions>
+          <RowDefinition Height="22"/>
           <RowDefinition Height="32"/>
           <RowDefinition Height="32"/>
           <RowDefinition Height="32"/>
@@ -1152,98 +1165,105 @@ Add-Type -AssemblyName System.Windows.Forms
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="75"/>
+          <ColumnDefinition Width="60"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Row 0 -->
+        <TextBlock
+          Grid.Row="0"
+          Grid.Column="0"
+          Grid.ColumnSpan="3"
+          Style="{StaticResource SectionHeader}"
+          Text="FILE HASHES"/>
+
         <!-- MD5 -->
         <Label
-          Grid.Row="0"
+          Grid.Row="1"
           Grid.Column="0"
           Name="lbl_MD5"
           Content="MD5"/>
         <TextBox
-          Grid.Row="0"
+          Grid.Row="1"
           Grid.Column="1"
           Name="txt_MD5"
           xml:space="preserve"/>
         <Button
-          Grid.Row="0"
+          Grid.Row="1"
           Grid.Column="2"
           Name="btn_MD5_Copy"
-          Content="Copy"/>
+          Style="{StaticResource CopyButton}"
+          Content="&#xE8C8;"/>
 
-        <!-- Row 1 -->
-        <!-- Row SHA1 -->
+        <!-- SHA1 -->
         <Label
-          Grid.Row="1"
+          Grid.Row="2"
           Grid.Column="0"
           Name="lbl_SHA1"
           Content="SHA1"/>
         <TextBox
-          Grid.Row="1"
+          Grid.Row="2"
           Grid.Column="1"
           Name="txt_SHA1"
           xml:space="preserve"/>
         <Button
-          Grid.Row="1"
+          Grid.Row="2"
           Grid.Column="2"
           Name="btn_SHA1_Copy"
-          Content="Copy"/>
+          Style="{StaticResource CopyButton}"
+          Content="&#xE8C8;"/>
 
-        <!-- Row 2 -->
-        <!-- Row SHA256 -->
+        <!-- SHA256 -->
         <Label
-          Grid.Row="2"
+          Grid.Row="3"
           Grid.Column="0"
           Name="lbl_SHA256"
           Content="SHA256"/>
         <TextBox
-          Grid.Row="2"
+          Grid.Row="3"
           Grid.Column="1"
           Name="txt_SHA256"
           xml:space="preserve"/>
         <Button
-          Grid.Row="2"
+          Grid.Row="3"
           Grid.Column="2"
           Name="btn_SHA256_Copy"
-          Content="Copy"/>
+          Style="{StaticResource CopyButton}"
+          Content="&#xE8C8;"/>
 
-        <!-- Row 3 -->
-        <!-- Digest -->
+        <!-- Digest-1 -->
         <Label
-          Grid.Row="3"
+          Grid.Row="4"
           Grid.Column="0"
           Name="lbl_Digest"
           Content="Digest-1"/>
         <TextBox
-          Grid.Row="3"
+          Grid.Row="4"
           Grid.Column="1"
           Name="txt_Digest"
           xml:space="preserve"/>
         <Button
-          Grid.Row="3"
+          Grid.Row="4"
           Grid.Column="2"
           Name="btn_Digest_Copy"
-          Content="Copy"/>
+          Style="{StaticResource CopyButton}"
+          Content="&#xE8C8;"/>
 
-        <!-- Row 4 -->
-        <!-- D-256 -->
+        <!-- Digest-256 -->
         <Label
-          Grid.Row="4"
+          Grid.Row="5"
           Grid.Column="0"
           Name="lbl_D256"
           Content="Digest-256"/>
         <TextBox
-          Grid.Row="4"
+          Grid.Row="5"
           Grid.Column="1"
           Name="txt_D256"
           xml:space="preserve"/>
         <Button
-          Grid.Row="4"
+          Grid.Row="5"
           Grid.Column="2"
           Name="btn_D256_Copy"
-          Content="Copy"/>
+          Style="{StaticResource CopyButton}"
+          Content="&#xE8C8;"/>
       </Grid>
 
       <Line
@@ -1263,6 +1283,7 @@ Add-Type -AssemblyName System.Windows.Forms
         Grid.Column="0"
         Grid.ColumnSpan="3">
         <Grid.RowDefinitions>
+          <RowDefinition Height="22"/>
           <RowDefinition Height="32"/>
           <RowDefinition Height="32"/>
           <RowDefinition Height="32"/>
@@ -1274,7 +1295,7 @@ Add-Type -AssemblyName System.Windows.Forms
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="105"/>
           <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="75"/>
+          <ColumnDefinition Width="60"/>
         </Grid.ColumnDefinitions>
         <Grid.Resources>
           <Style TargetType="Label" BasedOn="{StaticResource ThemedLabel}">
@@ -1347,116 +1368,135 @@ Add-Type -AssemblyName System.Windows.Forms
           </Style>
         </Grid.Resources>
 
-       <!-- Row -->
-        <Label
+        <TextBlock
           Grid.Row="0"
+          Grid.Column="0"
+          Grid.ColumnSpan="3"
+          Style="{StaticResource SectionHeader}"
+          Text="MSI PROPERTIES"/>
+
+        <!-- Row -->
+        <Label
+          Grid.Row="1"
           Grid.Column="0"
           Name="lbl_ProductName"
           Content="Product Name"/>
         <TextBox
-          Grid.Row="0"
+          Grid.Row="1"
           Grid.Column="1"
           Name="txt_ProductName"/>
         <Button
-          Grid.Row="0"
+          Grid.Row="1"
           Grid.Column="2"
           Name="btn_ProductName_Copy"
-          Content="Copy"/>
+          FontFamily="Segoe MDL2 Assets"
+          FontSize="14"
+          Content="&#xE8C8;"/>
 
         <!-- Row -->
         <Label
-          Grid.Row="1"
+          Grid.Row="2"
           Grid.Column="0"
           Name="lbl_Manufacturer"
           Content="Manufacturer"/>
         <TextBox
-          Grid.Row="1"
+          Grid.Row="2"
           Grid.Column="1"
           Name="txt_Manufacture"
           xml:space="preserve"/>
         <Button
-          Grid.Row="1"
+          Grid.Row="2"
           Grid.Column="2"
           Name="btn_Manufacture_Copy"
-          Content="Copy"/>
+          FontFamily="Segoe MDL2 Assets"
+          FontSize="14"
+          Content="&#xE8C8;"/>
 
         <!-- Row -->
         <Label
-          Grid.Row="2"
+          Grid.Row="3"
           Grid.Column="0"
           Name="lbl_ProductVersion"
           Content="Product Version"/>
         <TextBox
-          Grid.Row="2"
+          Grid.Row="3"
           Grid.Column="1"
           Name="txt_ProductVersion"
           xml:space="preserve"/>
         <Button
-          Grid.Row="2"
+          Grid.Row="3"
           Grid.Column="2"
           Name="btn_ProductVersion_Copy"
-          Content="Copy"/>
+          FontFamily="Segoe MDL2 Assets"
+          FontSize="14"
+          Content="&#xE8C8;"/>
 
         <!-- Row -->
         <Label
-          Grid.Row="3"
+          Grid.Row="4"
           Grid.Column="0"
           Name="lbl_ProductCode"
           Content="Product Code"/>
         <TextBox
-          Grid.Row="3"
+          Grid.Row="4"
           Grid.Column="1"
           Name="txt_ProductCode"
           xml:space="preserve"/>
         <Button
-          Grid.Row="3"
+          Grid.Row="4"
           Grid.Column="2"
           Name="btn_ProductCode_Copy"
-          Content="Copy"/>
+          FontFamily="Segoe MDL2 Assets"
+          FontSize="14"
+          Content="&#xE8C8;"/>
 
         <!-- Row -->
         <Label
-          Grid.Row="4"
+          Grid.Row="5"
           Grid.Column="0"
           Name="lbl_CompressedGUID"
           Content="Comp Prod Code"/>
         <TextBox
-          Grid.Row="4"
+          Grid.Row="5"
           Grid.Column="1"
           Name="txt_CompressedGUID"
           xml:space="preserve"/>
         <Button
-          Grid.Row="4"
+          Grid.Row="5"
           Grid.Column="2"
           Name="btn_CompressedGUID_Copy"
-          Content="Copy"/>
+          FontFamily="Segoe MDL2 Assets"
+          FontSize="14"
+          Content="&#xE8C8;"/>
 
         <!-- Row -->
         <Label
-          Grid.Row="5"
+          Grid.Row="6"
           Grid.Column="0"
           Name="lbl_UpgradeCode"
           Content="Upgrade Code"/>
         <TextBox
-          Grid.Row="5"
+          Grid.Row="6"
           Grid.Column="1"
           Name="txt_UpgradeCode"
           xml:space="preserve"/>
         <Button
-          Grid.Row="5"
+          Grid.Row="6"
           Grid.Column="2"
           Name="btn_UpgradeCode_Copy"
-          Content="Copy"/>
+          FontFamily="Segoe MDL2 Assets"
+          FontSize="14"
+          Content="&#xE8C8;"/>
 
         <!-- Row -->
         <Button
-          Grid.Row="6"
+          Grid.Row="7"
           Grid.Column="0"
           Name="btn_AllProperties"
           Content="All Properties"
           IsEnabled="False"/>
         <ListBox
-          Grid.Row="6"
+          Grid.Row="7"
           Grid.Column="1"
           Name="lsbox_FilePath"
           AllowDrop="True"
@@ -1464,15 +1504,20 @@ Add-Type -AssemblyName System.Windows.Forms
           TabIndex="0">
           <ListBox.Items>
             <ListBoxItem>
-              <TextBlock Text="Drag and drop any file here - hashes for all, properties for *.msi"/>
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" FontSize="18" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" Margin="0,0,8,0"/>
+                <TextBlock VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" FontStyle="Italic" Text="Drop a file here · hashes for any file, properties for *.msi"/>
+              </StackPanel>
             </ListBoxItem>
           </ListBox.Items>
         </ListBox>
         <Button
-          Grid.Row="6"
+          Grid.Row="7"
           Grid.Column="2"
           Name="btn_FilePath_Copy"
-          Content="Copy"/>
+          FontFamily="Segoe MDL2 Assets"
+          FontSize="14"
+          Content="&#xE8C8;"/>
       </Grid>
     </Grid>
     </DockPanel>
