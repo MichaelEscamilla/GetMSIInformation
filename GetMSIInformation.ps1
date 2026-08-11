@@ -689,14 +689,352 @@ Add-Type -AssemblyName System.Windows.Forms
   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   Name="form1"
-  Width="900"
-  Height="489"
+  Width="920"
+  Height="560"
   ResizeMode="NoResize"
+  WindowStyle="None"
+  AllowsTransparency="True"
+  Background="Transparent"
   Title="MSI Properties"
+  FontFamily="Segoe UI"
   FontSize="12">
 
-  <DockPanel>
-    <Menu DockPanel.Dock="Top">
+  <Window.Resources>
+    <!-- Color tokens (michaeltheadmin.com palette) -->
+    <SolidColorBrush x:Key="Bg" Color="#292524"/>
+    <SolidColorBrush x:Key="Surface" Color="#1C1917"/>
+    <SolidColorBrush x:Key="Surface2" Color="#44403C"/>
+    <SolidColorBrush x:Key="Border" Color="#3A3633"/>
+    <SolidColorBrush x:Key="BorderMuted" Color="#57534E"/>
+    <SolidColorBrush x:Key="Text" Color="#F5F5F4"/>
+    <SolidColorBrush x:Key="TextMuted" Color="#A8A29E"/>
+    <SolidColorBrush x:Key="Accent" Color="#FB923C"/>
+    <SolidColorBrush x:Key="AccentHover" Color="#F97316"/>
+    <SolidColorBrush x:Key="AccentText" Color="#1C1917"/>
+    <SolidColorBrush x:Key="Danger" Color="#EF4444"/>
+
+    <!-- Menu item templates -->
+    <ControlTemplate x:Key="MenuTopLevelHeader" TargetType="MenuItem">
+      <Grid>
+        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="10,4">
+          <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+        </Border>
+        <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsSubmenuOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+          <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8" Padding="4" Margin="0,4,10,10">
+            <Border.Effect>
+              <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.5" Color="#000000"/>
+            </Border.Effect>
+            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+          </Border>
+        </Popup>
+      </Grid>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsHighlighted" Value="True">
+          <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
+        </Trigger>
+        <Trigger Property="IsSubmenuOpen" Value="True">
+          <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
+        </Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="MenuTopLevelItem" TargetType="MenuItem">
+      <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="10,4">
+        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+      </Border>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsHighlighted" Value="True">
+          <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
+        </Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="MenuSubmenuItem" TargetType="MenuItem">
+      <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="12,6" Margin="1">
+        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+      </Border>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsHighlighted" Value="True">
+          <Setter TargetName="Bd" Property="Background" Value="{StaticResource Accent}"/>
+          <Setter Property="Foreground" Value="{StaticResource AccentText}"/>
+        </Trigger>
+        <Trigger Property="IsEnabled" Value="False">
+          <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+        </Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="MenuSubmenuHeader" TargetType="MenuItem">
+      <Grid>
+        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="12,6" Margin="1">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <ContentPresenter Grid.Column="0" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="10" VerticalAlignment="Center" Margin="16,0,0,0"/>
+          </Grid>
+        </Border>
+        <Popup Placement="Right" IsOpen="{TemplateBinding IsSubmenuOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+          <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8" Padding="4" Margin="0,0,10,10">
+            <Border.Effect>
+              <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.5" Color="#000000"/>
+            </Border.Effect>
+            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+          </Border>
+        </Popup>
+      </Grid>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsHighlighted" Value="True">
+          <Setter TargetName="Bd" Property="Background" Value="{StaticResource Accent}"/>
+          <Setter Property="Foreground" Value="{StaticResource AccentText}"/>
+        </Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- Menu -->
+    <Style TargetType="Menu">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="Padding" Value="6,2"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style TargetType="MenuItem">
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Style.Triggers>
+        <Trigger Property="Role" Value="TopLevelHeader">
+          <Setter Property="Template" Value="{StaticResource MenuTopLevelHeader}"/>
+        </Trigger>
+        <Trigger Property="Role" Value="TopLevelItem">
+          <Setter Property="Template" Value="{StaticResource MenuTopLevelItem}"/>
+        </Trigger>
+        <Trigger Property="Role" Value="SubmenuHeader">
+          <Setter Property="Template" Value="{StaticResource MenuSubmenuHeader}"/>
+        </Trigger>
+        <Trigger Property="Role" Value="SubmenuItem">
+          <Setter Property="Template" Value="{StaticResource MenuSubmenuItem}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+    <Style TargetType="Separator">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Separator">
+            <Border Height="1" Background="{StaticResource Border}" Margin="8,4"/>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Labels -->
+    <Style x:Key="ThemedLabel" TargetType="Label">
+      <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="2.5"/>
+      <Setter Property="Padding" Value="4,0,8,0"/>
+      <Setter Property="VerticalAlignment" Value="Stretch"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="HorizontalContentAlignment" Value="Right"/>
+    </Style>
+    <Style TargetType="Label" BasedOn="{StaticResource ThemedLabel}"/>
+
+    <!-- Read-only info textboxes -->
+    <Style x:Key="ThemedTextBox" TargetType="TextBox">
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="Background" Value="{StaticResource Surface}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Margin" Value="2.5"/>
+      <Setter Property="Padding" Value="8,0"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="IsReadOnly" Value="True"/>
+      <Setter Property="CaretBrush" Value="{StaticResource Accent}"/>
+      <Setter Property="SelectionBrush" Value="{StaticResource Accent}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+              <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BorderMuted}"/>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="TextBox" BasedOn="{StaticResource ThemedTextBox}"/>
+
+    <!-- Buttons -->
+    <Style x:Key="ThemedButton" TargetType="Button">
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="Background" Value="{StaticResource Surface2}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource BorderMuted}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Margin" Value="2.5"/>
+      <Setter Property="Padding" Value="10,4"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Accent}"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                <Setter Property="Foreground" Value="{StaticResource AccentText}"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentHover}"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentHover}"/>
+                <Setter Property="Foreground" Value="{StaticResource AccentText}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface}"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Border}"/>
+                <Setter TargetName="Bd" Property="Opacity" Value="0.6"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="Button" BasedOn="{StaticResource ThemedButton}"/>
+
+    <!-- Drag and drop list -->
+    <Style x:Key="ThemedListBox" TargetType="ListBox">
+      <Setter Property="Background" Value="{StaticResource Surface}"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Margin" Value="2.5"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBox">
+            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+              <ScrollViewer Focusable="False" Padding="2" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                <ItemsPresenter/>
+              </ScrollViewer>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="ListBox" BasedOn="{StaticResource ThemedListBox}"/>
+    <Style x:Key="ThemedListBoxItem" TargetType="ListBoxItem">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Padding" Value="8,6"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Height" Value="{Binding ElementName=lsbox_FilePath, Path=ActualHeight}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="ListBoxItem" BasedOn="{StaticResource ThemedListBoxItem}"/>
+
+    <!-- Tooltip -->
+    <Style TargetType="ToolTip">
+      <Setter Property="Background" Value="{StaticResource Surface}"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="8,4"/>
+    </Style>
+
+    <!-- Title bar buttons -->
+    <Style x:Key="TitleBarButton" TargetType="Button">
+      <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Width" Value="46"/>
+      <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+      <Setter Property="FontSize" Value="10"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Surface2}"/>
+                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="TitleBarCloseButton" TargetType="Button">
+      <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Width" Value="46"/>
+      <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+      <Setter Property="FontSize" Value="10"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="0,11,0,0">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Danger}"/>
+                <Setter Property="Foreground" Value="#FFFFFF"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+
+  <Border Background="{StaticResource Bg}" CornerRadius="12" BorderBrush="{StaticResource BorderMuted}" BorderThickness="1" Margin="12">
+    <Border.Effect>
+      <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.5" Color="#000000"/>
+    </Border.Effect>
+    <DockPanel>
+      <Border Name="titlebar" DockPanel.Dock="Top" Background="{StaticResource Surface}" CornerRadius="11,11,0,0" Height="42">
+        <DockPanel LastChildFill="True">
+          <Button Name="titlebar_Close" DockPanel.Dock="Right" Style="{StaticResource TitleBarCloseButton}" Content="&#xE8BB;"/>
+          <Button Name="titlebar_Minimize" DockPanel.Dock="Right" Style="{StaticResource TitleBarButton}" Content="&#xE921;"/>
+          <TextBlock DockPanel.Dock="Left" Margin="14,0,0,0" VerticalAlignment="Center" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{StaticResource Accent}" Text="&#xE7B8;"/>
+          <TextBlock Margin="10,0,0,0" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Text}" Text="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}"/>
+        </DockPanel>
+      </Border>
+      <Menu DockPanel.Dock="Top">
       <MenuItem Header="File">
         <MenuItem Name="MenuItem_Open"
                   Header="Open Icon Temp Folder"/>
@@ -744,34 +1082,16 @@ Add-Type -AssemblyName System.Windows.Forms
           <ColumnDefinition Width="0.5*"/>
           <ColumnDefinition Width="0.5*"/>
         </Grid.ColumnDefinitions>
-        <Grid.Resources>
-          <Style TargetType="Button">
-            <Setter Property="Margin"
-                    Value="5,2.5,2.5,2.5"/>
-            <Setter Property="Width"
-                    Value="Auto"/>
-            <Setter Property="HorizontalAlignment"
-                    Value="Stretch"/>
-            <Setter Property="VerticalAlignment"
-                    Value="Stretch"/>
-            <Setter Property="VerticalContentAlignment"
-                    Value="Center"/>
-            <Setter Property="IsEnabled"
-                    Value="False"/>
-          </Style>
-          <Style TargetType="Border">
-            <Setter Property="Margin"
-                    Value="5,2.5,2.5,2.5"/>
-          </Style>
-        </Grid.Resources>
         
         <Border
           Grid.Row="0"
           Grid.Column="0"
           Grid.ColumnSpan="2"
-          BorderBrush="Black"
+          Margin="5,2.5,2.5,2.5"
+          CornerRadius="8"
+          BorderBrush="{StaticResource Border}"
           BorderThickness="1"
-          Background="WhiteSmoke">
+          Background="{StaticResource Surface}">
           <Grid
             Name="grid_Icon">
             <Image
@@ -789,7 +1109,7 @@ Add-Type -AssemblyName System.Windows.Forms
               HorizontalAlignment="Center"
               VerticalAlignment="Center"
               FontStyle="Italic"
-              Foreground="Gray"
+              Foreground="{StaticResource TextMuted}"
               Visibility="Visible"/>
           </Grid>
         </Border>
@@ -815,7 +1135,7 @@ Add-Type -AssemblyName System.Windows.Forms
         Y1="1"
         X2="0"
         Y2="0"
-        Stroke="Black"
+        Stroke="{StaticResource Border}"
         StrokeThickness="2.5"
         Stretch="Uniform"/>
 
@@ -834,64 +1154,6 @@ Add-Type -AssemblyName System.Windows.Forms
           <ColumnDefinition Width="*"/>
           <ColumnDefinition Width="75"/>
         </Grid.ColumnDefinitions>
-        <Grid.Resources>
-          <Style TargetType="Label">
-            <Setter Property="Margin"
-                    Value="2.5"/>
-            <Setter Property="HorizontalAlignment"
-                    Value="Stretch"/>
-            <Setter Property="HorizontalContentAlignment"
-                    Value="Center"/>
-            <Setter Property="VerticalAlignment"
-                    Value="Stretch"/>
-            <Setter Property="VerticalContentAlignment"
-                    Value="Center"/>
-            <Setter Property="IsEnabled"
-                    Value="True"/>
-          </Style>
-          <Style TargetType="TextBox">
-            <Setter Property="Margin"
-                    Value="2.5"/>
-            <Setter Property="Width"
-                    Value="Auto"/>
-            <Setter Property="HorizontalAlignment"
-                    Value="Stretch"/>
-            <Setter Property="VerticalAlignment"
-                    Value="Stretch"/>
-            <Setter Property="VerticalContentAlignment"
-                    Value="Center"/>
-            <Setter Property="IsEnabled"
-                    Value="True"/>
-            <Setter Property="IsReadOnly"
-                    Value="True"/>
-          </Style>
-          <Style TargetType="Button">
-            <Setter Property="Margin"
-                    Value="2.5"/>
-            <Setter Property="Width"
-                    Value="Auto"/>
-            <Setter Property="HorizontalAlignment"
-                    Value="Stretch"/>
-            <Setter Property="VerticalAlignment"
-                    Value="Stretch"/>
-            <Setter Property="VerticalContentAlignment"
-                    Value="Center"/>
-            <Setter Property="IsEnabled"
-                    Value="False"/>
-          </Style>
-          <Style TargetType="ListBoxItem">
-            <Setter Property="HorizontalAlignment"
-                    Value="Stretch"/>
-            <Setter Property="HorizontalContentAlignment"
-                    Value="Center"/>
-            <Setter Property="VerticalAlignment"
-                    Value="Stretch"/>
-            <Setter Property="VerticalContentAlignment"
-                    Value="Center"/>
-            <Setter Property="Height"
-                    Value="{Binding ElementName=lsbox_FilePath, Path=ActualHeight}"/>
-          </Style>
-        </Grid.Resources>
 
         <!-- Row 0 -->
         <!-- MD5 -->
@@ -992,7 +1254,7 @@ Add-Type -AssemblyName System.Windows.Forms
         Y1="0"
         X2="1"
         Y2="0"
-        Stroke="Black"
+        Stroke="{StaticResource Border}"
         StrokeThickness="2"
         Stretch="Uniform"/>
 
@@ -1015,7 +1277,7 @@ Add-Type -AssemblyName System.Windows.Forms
           <ColumnDefinition Width="75"/>
         </Grid.ColumnDefinitions>
         <Grid.Resources>
-          <Style TargetType="Label">
+          <Style TargetType="Label" BasedOn="{StaticResource ThemedLabel}">
             <Setter Property="Margin"
                     Value="2.5"/>
             <Setter Property="HorizontalAlignment"
@@ -1029,7 +1291,7 @@ Add-Type -AssemblyName System.Windows.Forms
             <Setter Property="IsEnabled"
                     Value="True"/>
           </Style>
-          <Style TargetType="TextBox">
+          <Style TargetType="TextBox" BasedOn="{StaticResource ThemedTextBox}">
             <Setter Property="Margin"
                     Value="2.5"/>
             <Setter Property="Width"
@@ -1045,7 +1307,7 @@ Add-Type -AssemblyName System.Windows.Forms
             <Setter Property="IsReadOnly"
                     Value="True"/>
           </Style>
-          <Style TargetType="Button">
+          <Style TargetType="Button" BasedOn="{StaticResource ThemedButton}">
             <Setter Property="Margin"
                     Value="2.5"/>
             <Setter Property="Width"
@@ -1059,7 +1321,7 @@ Add-Type -AssemblyName System.Windows.Forms
             <Setter Property="IsEnabled"
                     Value="False"/>
           </Style>
-          <Style TargetType="ListBox">
+          <Style TargetType="ListBox" BasedOn="{StaticResource ThemedListBox}">
             <Setter Property="Margin"
                     Value="2.5"/>                
             <Setter Property="HorizontalAlignment"
@@ -1071,7 +1333,7 @@ Add-Type -AssemblyName System.Windows.Forms
             <Setter Property="VerticalContentAlignment"
                     Value="Center"/>
           </Style>
-          <Style TargetType="ListBoxItem">
+          <Style TargetType="ListBoxItem" BasedOn="{StaticResource ThemedListBoxItem}">
             <Setter Property="HorizontalAlignment"
                     Value="Stretch"/>
             <Setter Property="HorizontalContentAlignment"
@@ -1213,7 +1475,8 @@ Add-Type -AssemblyName System.Windows.Forms
           Content="Copy"/>
       </Grid>
     </Grid>
-  </DockPanel>
+    </DockPanel>
+  </Border>
 </Window>
 "@
 
@@ -1225,6 +1488,9 @@ $readerformMSIProperties = New-Object System.Xml.XmlNodeReader $XAMLformMSIPrope
 
 # Create Variables for all the controls in the XAML form
 $XAMLformMSIProperties.SelectNodes("//*[@Name]") | ForEach-Object { Set-Variable -Name ($_.Name) -Value $formMSIProperties.FindName($_.Name) -Scope Script }
+
+# Disable all action buttons until a file is loaded
+Disable-AllButtons
 
 #############################################
 ############## Event Handlers ###############
@@ -1473,6 +1739,19 @@ $MenuItem_GitHub.add_Click({
 $MenuItem_About.add_Click({
     # Open Blog
     Start-Process "https://michaeltheadmin.com"
+  })
+
+#### Title Bar Handlers ####
+$titlebar.add_MouseLeftButtonDown({
+    try { $formMSIProperties.DragMove() } catch { }
+  })
+
+$titlebar_Minimize.add_Click({
+    $formMSIProperties.WindowState = [System.Windows.WindowState]::Minimized
+  })
+
+$titlebar_Close.add_Click({
+    $formMSIProperties.Close()
   })
 
 #### Button Handlers ####
