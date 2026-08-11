@@ -1931,12 +1931,10 @@ $formMSIProperties.Add_Loaded({
         # Show the UI
         $lsbox_FilePath.Items.Clear()
         $lsbox_FilePath.Items.Add("Loading: [$FilePath]")
-        $txtblk_StatusBar.Text = "Processing file..."
 
         # Process the File
         $formMSIProperties.Dispatcher.InvokeAsync({
             Invoke-GetMSIInformation -MSIPath $FilePath
-            $txtblk_StatusBar.Text = "Created By Michael Escamilla"
           }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
       }
     }
@@ -1944,7 +1942,7 @@ $formMSIProperties.Add_Loaded({
 
 #### Listbox Drag and Drop ####
 $lsbox_FilePath.Add_Drop({
-    $filename = $_.Data.GetData([Windows.Forms.DataFormats]::FileDrop)
+    $Script:filename = $_.Data.GetData([Windows.Forms.DataFormats]::FileDrop)
     Write-Host "File Dropped: [$filename]"
     if ($filename) {
       # Reset the form
@@ -1967,8 +1965,14 @@ $lsbox_FilePath.Add_Drop({
         $lsbox_FilePath.FontSize = 16
       }
       else {
-        # Get MSI Information
-        Invoke-GetMSIInformation -MSIPath $filename
+        # Reset listbox
+        $lsbox_FilePath.Items.Clear()
+        $lsbox_FilePath.Items.Add("Loading: [$filename]")
+
+        # Process the File
+        $formMSIProperties.Dispatcher.InvokeAsync({
+            Invoke-GetMSIInformation -MSIPath $Script:filename
+          }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
       }
     }
   })
