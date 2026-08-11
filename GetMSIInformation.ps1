@@ -165,7 +165,7 @@ function Convert-ProductCodeToCompressedGuid {
   )
 
   function Get-ReversedString ([array]$a) {
-    [String]::Join('', $a[-1..-($a.Count)])
+    [String]::Join('', $a[-1.. - ($a.Count)])
   }
 
   function Get-ReversedBytes ([String]$a) {
@@ -1067,7 +1067,6 @@ Add-Type -AssemblyName System.Windows.Forms
             <MenuItem Header="About">
               <MenuItem Name="MenuItem_GitHub" Header="GitHub - GetMSIInformation"/>
               <MenuItem Name="MenuItem_About" Header="michaeltheadmin.com"/>
-              <Separator/>
               <MenuItem Name="MenuItem_Version" Header="Version 1.0.0" IsEnabled="False" FontWeight="Normal" />
             </MenuItem>
           </Menu>
