@@ -22,14 +22,34 @@ jobs:
           Write-Host "Detected version: $version"
           "version=$version" >> $env:GITHUB_OUTPUT
 
+      - name: Determine release type
+        id: meta
+        shell: pwsh
+        run: |
+          $version = "${{ steps.ver.outputs.version }}"
+          if ($env:GITHUB_REF -eq 'refs/heads/main') {
+            $tag = "$version"
+            $name = "${{ github.event.repository.name }} $version"
+            $draft = 'false'
+            Write-Host "main branch -> published release $tag"
+          } else {
+            $tag = "$version-rc.${{ github.run_number }}"
+            $name = "${{ github.event.repository.name }} $version"
+            $draft = 'true'
+            Write-Host "non-main branch -> draft release $tag"
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "name=$name" >> $env:GITHUB_OUTPUT
+          "draft=$draft" >> $env:GITHUB_OUTPUT
+
       - name: Check if release already exists
         id: check
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = "v${{ steps.ver.outputs.version }}"
-          $exists = gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null
+          $tag = "${{ steps.meta.outputs.tag }}"
+          gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null | Out-Null
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Release $tag already exists. Skipping."
             "exists=true" >> $env:GITHUB_OUTPUT
@@ -37,6 +57,8 @@ jobs:
             Write-Host "Release $tag does not exist. Will create."
             "exists=false" >> $env:GITHUB_OUTPUT
           }
+          # gh sets a non-zero exit code when the release is missing; reset so the step succeeds.
+          exit 0
 
       - name: Extract changelog notes
         if: steps.check.outputs.exists == 'false'
@@ -70,8 +92,9 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.ver.outputs.version }}
-          name: v${{ steps.ver.outputs.version }}
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
+          draft: ${{ steps.meta.outputs.draft }}
           files: GetMSIInformation.ps1
           body_path: release_notes.md
           fail_on_unmatched_files: true
