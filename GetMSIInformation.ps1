@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.8.12.0
+.VERSION 2026.8.12.1
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -41,6 +41,7 @@
 2026.8.12.0   - Added a check for updates feature.
                 Manual check available under the 'About' menu.
                 A non-blocking background check runs at startup and notifies via the status bar when a newer release is available.
+2026.8.12.1   - Added Logic to Update the script depending on the way it was launched.
 
 .PRIVATEDATA
 
@@ -73,7 +74,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.8.12.0"
+[System.Version]$Script:ScriptVersion = "2026.8.12.1"
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 # Icon Temp Folder Path
@@ -606,6 +607,9 @@ function Invoke-FormReset {
   $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::FontWeightProperty)
   $lsbox_FilePath.ClearValue([System.Windows.Controls.Control]::FontSizeProperty)
 
+  # Forget the loaded MSI so a relaunch (update) doesn't pass a stale path
+  $Script:LoadedMSIPath = $null
+
   # Disable all buttons
   Disable-AllButtons
 }
@@ -655,6 +659,9 @@ function Invoke-GetMSIInformation {
   $lsbox_FilePath.Items.Clear()
   $lsbox_FilePath.Items.Add($MSIPath[0])
 
+  # Remember the loaded file so an update relaunch can reopen it
+  $Script:LoadedMSIPath = $MSIPath[0].FullName
+
   # Remove lock on current file
   [System.GC]::Collect()
   [System.GC]::WaitForPendingFinalizers()
@@ -703,6 +710,7 @@ $Script:TestForUpdate = {
     UpdateAvailable = ($latestVersion -gt $CurrentVersion)
     LatestVersion   = $latestVersion
     HtmlUrl         = $release.html_url
+    Tag             = $release.tag_name
   }
 }
 
@@ -769,6 +777,7 @@ function Show-UpdateAvailable {
   if (-not $Result.UpdateAvailable) { return }
 
   $Script:LatestReleaseUrl = if ($Result.HtmlUrl) { $Result.HtmlUrl } else { $Script:ReleasesPageUrl }
+  $Script:LatestReleaseTag = $Result.Tag
   $MenuItem_UpdateAvailable.Header = "Update Available: v$($Result.LatestVersion)"
   $MenuItem_UpdateAvailable.Visibility = [System.Windows.Visibility]::Visible
 }
@@ -812,6 +821,175 @@ function Open-ReleasePage {
   # Universal fallback for the update action: open the newer release (or the releases list).
   if ($Script:LatestReleaseUrl) { Start-Process $Script:LatestReleaseUrl }
   else { Start-Process $Script:ReleasesPageUrl }
+}
+
+function Update-ScriptFile {
+  # Overwrites the target .ps1 with the latest release. Returns $false so the caller can fall
+  # back to the releases page when the file can't be replaced in place (locked, read-only, offline).
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ScriptPath,
+    [Parameter(Mandatory = $true)]
+    [string]$Tag
+  )
+
+  # Can't overwrite a file that's locked (e.g. open in an editor).
+  if (Test-FileLock -Path $ScriptPath) {
+    Write-Host "Update aborted: script file is locked [$ScriptPath]"
+    return $false
+  }
+
+  $downloadUrl = "https://raw.githubusercontent.com/$($Script:GitHubRepo)/$Tag/$($Script:ScriptName)"
+  $tempFile = Join-Path -Path $env:TEMP -ChildPath 'GetMSIInformation.update.ps1'
+
+  try {
+    Write-Host "Downloading update: [$downloadUrl]"
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $tempFile -UseBasicParsing -ErrorAction Stop
+    if (-not (Test-Path $tempFile) -or (Get-Item $tempFile).Length -eq 0) {
+      throw 'Downloaded file is empty.'
+    }
+    Write-Host "Replacing script:   [$ScriptPath]"
+    Copy-Item -Path $tempFile -Destination $ScriptPath -Force -ErrorAction Stop
+    return $true
+  }
+  catch {
+    Write-Host "Update failed: $($_.Exception.Message)"
+    return $false
+  }
+  finally {
+    Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function Restart-Script {
+  # Relaunches the on-disk script so an applied update takes effect, then closes this instance.
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$ScriptPath,
+    [string]$FilePath
+  )
+
+  # Prefer pwsh 7.4+ (matches the startup relaunch); fall back to Windows PowerShell.
+  if ($Script:PowerShellPath -and $Script:PowerShellPath.Version -ge [Version]"7.4") {
+    $CommandExe = $Script:PowerShellPath.Path
+  }
+  else {
+    $CommandExe = "C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe"
+  }
+
+  $argList = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File `"$ScriptPath`""
+  if (-not [string]::IsNullOrEmpty($FilePath)) {
+    $argList += " -FilePath `"$FilePath`""
+  }
+
+  Write-Host "Relaunching updated script: [$ScriptPath]"
+  Start-Process -FilePath $CommandExe -ArgumentList $argList
+  $formMSIProperties.Close()
+}
+
+function Install-RightClickMenu {
+  # Installs or refreshes the LOCALAPPDATA copy, icon, and .msi right-click registry entry.
+  # Shared by the Install menu item and the RightClick update path.
+  [CmdletBinding()]
+  param()
+
+    # Set Script Name
+    $SaveAsScriptName = $ScriptName
+
+    # Create a new directory in the LOCALAPPDATA folder
+    Write-Host "Creating Folder:    [$($Script:RightClickMenuFolderPath)]"
+    $DestinationFolderPath = "$($Script:RightClickMenuFolderPath)"
+    if (-not (Test-Path $DestinationFolderPath)) {
+      $DestinationFolder = New-Item -ItemType Directory -Path $DestinationFolderPath -ErrorAction SilentlyContinue
+    }
+    else {
+      $DestinationFolder = Get-Item -Path $DestinationFolderPath
+    }
+
+    # Create an ico file from $Script:WindowIconBase64
+    $IconFilePath = "$($DestinationFolder.FullName)\GetMSIInformation.ico"
+
+    # Delete existing Icon file if it exists
+    Remove-Item $IconFilePath -Force -ErrorAction SilentlyContinue | Out-Null
+
+    Write-Host "Creating Icon file: [$IconFilePath]"
+    $IconByteArray = [System.Convert]::FromBase64String($Script:WindowIconBase64)
+    [System.IO.File]::WriteAllBytes($IconFilePath, $IconByteArray)
+
+    # Check if the script is being Invoked from the Internet
+    if ($PSCommandPath -ne "") {
+      # Copy the script to the new directory
+      Write-Host "Creating Script:    [$($DestinationFolder.FullName)\$($SaveAsScriptName)]"
+      Copy-Item "$PSScriptRoot\$([System.IO.Path]::GetFileName($PSCommandPath))" -Destination "$($DestinationFolder.FullName)\$($SaveAsScriptName)" -ErrorAction SilentlyContinue
+    }
+    else {
+      Write-Host "PSCommandPath is not available."
+      # Script URL
+      $ScriptURL = "https://raw.githubusercontent.com/MichaelEscamilla/GetMSIInformation/main/GetMSIInformation.ps1"
+      Write-Host "Downloading script: [$ScriptURL]"
+      try {
+        Invoke-WebRequest -Uri $ScriptURL -OutFile "$($DestinationFolder.FullName)\$($SaveAsScriptName)" -ErrorAction Stop
+        Write-Host "Script saved:       [$($DestinationFolder.FullName)\$($SaveAsScriptName)]"
+      }
+      catch {
+        Write-Host "Failed to download the script: $_"
+      }
+    }
+
+    # Reg2CI (c) 2020 by Roger Zander
+    # https://github.com/asjimene/GetMSIInfo/blob/master/GetMSIInfo.ps1
+
+    # Check if the registry path for .msi file associations exists, if not, create it.
+    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi") -ne $true) {
+      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi" -Force -ErrorAction SilentlyContinue 
+    }
+
+    # Check if the 'shell' subkey exists under the .msi file associations, if not, create it.
+    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell") -ne $true) {
+      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell" -Force -ErrorAction SilentlyContinue 
+    }
+
+    # Check if the 'Get MSI Information' subkey exists under 'shell', if not, create it.
+    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName") -ne $true) {
+      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Force -ErrorAction SilentlyContinue 
+    }
+
+    # Set the 'icon' value under 'Get MSI Information'
+    try {
+      New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $IconFilePath -PropertyType String -Force -ErrorAction SilentlyContinue
+    }
+    catch {
+      if ($Script:PowerShellPath) {
+        New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $Script:PowerShellPath.Path -PropertyType String -Force -ErrorAction SilentlyContinue
+      }
+      else {
+        New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
+      }
+    }
+   
+    # Check if the 'command' subkey exists under 'Get MSI Information', if not, create it.
+    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command") -ne $true) {
+      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Force -ErrorAction SilentlyContinue 
+    }
+
+    # Set the default value of the 'Get MSI Information' key to "Get MSI Information".
+    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name '(default)' -Value "$RightClickMenuName" -PropertyType String -Force -ea SilentlyContinue;
+
+    # Prefer pwsh 7.4+ so the menu launches directly and skips the slow relaunch.
+    # Fall back to Windows PowerShell (always present) when pwsh isn't installed.
+    if ($Script:PowerShellPath -and $Script:PowerShellPath.Version -ge [Version]"7.4") {
+      $CommandExe = $Script:PowerShellPath.Path
+    }
+    else {
+      $CommandExe = "C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe"
+    }
+
+    # Set the default value of the 'command' key to execute a PowerShell script with the .msi file as an argument.
+    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Name '(default)' -Value "`"$CommandExe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -Command `"$($DestinationFolder.FullName)\$($SaveAsScriptName)`" -FilePath '%1'" -PropertyType String -Force -ErrorAction SilentlyContinue;
+    Write-Host "Registry Modified:  [HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$($RightClickMenuName)]"
+    Write-Host "Installation Complete"
 }
 #endregion Functions
 
@@ -2092,21 +2270,21 @@ $formMSIProperties.Add_Loaded({
 
 #### Listbox Drag and Drop ####
 $lsbox_FilePath.Add_Drop({
-    $Script:filename = $_.Data.GetData([Windows.Forms.DataFormats]::FileDrop)
-    Write-Host "File Dropped: [$filename]"
-    if ($filename) {
+    $Script:DroppedFilePath = $_.Data.GetData([Windows.Forms.DataFormats]::FileDrop)
+    Write-Host "File Dropped: [$Script:DroppedFilePath]"
+    if ($Script:DroppedFilePath) {
       # Reset the form
       Invoke-FormReset
 
-      # Check if $FilePath is locked
-      if (Test-FileLock -Path "$($filename)") {
-        Write-Warning "The file is locked: [$filename]"
+      # Check if the dropped file is locked
+      if (Test-FileLock -Path "$($Script:DroppedFilePath)") {
+        Write-Warning "The file is locked: [$Script:DroppedFilePath]"
   
         # Clear the listbox
         $lsbox_FilePath.Items.Clear()
   
         # Add an error message to the listbox
-        $lsbox_FilePath.Items.Add("ERROR: The file is locked:`n[$filename]")
+        $lsbox_FilePath.Items.Add("ERROR: The file is locked:`n[$Script:DroppedFilePath]")
           
         # Make the Error message bold, red and yellow
         $lsbox_FilePath.Background = [System.Windows.Media.Brushes]::Red
@@ -2117,11 +2295,11 @@ $lsbox_FilePath.Add_Drop({
       else {
         # Reset listbox
         $lsbox_FilePath.Items.Clear()
-        $lsbox_FilePath.Items.Add("Loading: [$filename]")
+        $lsbox_FilePath.Items.Add("Loading: [$Script:DroppedFilePath]")
 
         # Process the File
         $formMSIProperties.Dispatcher.InvokeAsync({
-            Invoke-GetMSIInformation -MSIPath $Script:filename
+            Invoke-GetMSIInformation -MSIPath $Script:DroppedFilePath
           }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
       }
     }
@@ -2155,101 +2333,7 @@ $MenuItem_Open.add_Click({
 
 $MenuItem_Install.add_Click({
     Write-Host "Menu Item Install Clicked"
-    # Set Script Name
-    $SaveAsScriptName = $ScriptName
-
-    # Create a new directory in the LOCALAPPDATA folder
-    Write-Host "Creating Folder:    [$($Script:RightClickMenuFolderPath)]"
-    $DestinationFolderPath = "$($Script:RightClickMenuFolderPath)"
-    if (-not (Test-Path $DestinationFolderPath)) {
-      $DestinationFolder = New-Item -ItemType Directory -Path $DestinationFolderPath -ErrorAction SilentlyContinue
-    }
-    else {
-      $DestinationFolder = Get-Item -Path $DestinationFolderPath
-    }
-
-    # Create an ico file from $Script:WindowIconBase64
-    $IconFilePath = "$($DestinationFolder.FullName)\GetMSIInformation.ico"
-
-    # Delete existing Icon file if it exists
-    Remove-Item $IconFilePath -Force -ErrorAction SilentlyContinue | Out-Null
-
-    Write-Host "Creating Icon file: [$IconFilePath]"
-    $IconByteArray = [System.Convert]::FromBase64String($Script:WindowIconBase64)
-    [System.IO.File]::WriteAllBytes($IconFilePath, $IconByteArray)
-
-    # Check if the script is being Invoked from the Internet
-    if ($PSCommandPath -ne "") {
-      # Copy the script to the new directory
-      Write-Host "Creating Script:    [$($DestinationFolder.FullName)\$($SaveAsScriptName)]"
-      Copy-Item "$PSScriptRoot\$([System.IO.Path]::GetFileName($PSCommandPath))" -Destination "$($DestinationFolder.FullName)\$($SaveAsScriptName)" -ErrorAction SilentlyContinue
-    }
-    else {
-      Write-Host "PSCommandPath is not available."
-      # Script URL
-      $ScriptURL = "https://raw.githubusercontent.com/MichaelEscamilla/GetMSIInformation/main/GetMSIInformation.ps1"
-      Write-Host "Downloading script: [$ScriptURL]"
-      try {
-        Invoke-WebRequest -Uri $ScriptURL -OutFile "$($DestinationFolder.FullName)\$($SaveAsScriptName)" -ErrorAction Stop
-        Write-Host "Script saved:       [$($DestinationFolder.FullName)\$($SaveAsScriptName)]"
-      }
-      catch {
-        Write-Host "Failed to download the script: $_"
-      }
-    }
-
-    # Reg2CI (c) 2020 by Roger Zander
-    # https://github.com/asjimene/GetMSIInfo/blob/master/GetMSIInfo.ps1
-
-    # Check if the registry path for .msi file associations exists, if not, create it.
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi") -ne $true) {
-      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi" -Force -ErrorAction SilentlyContinue 
-    }
-
-    # Check if the 'shell' subkey exists under the .msi file associations, if not, create it.
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell") -ne $true) {
-      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell" -Force -ErrorAction SilentlyContinue 
-    }
-
-    # Check if the 'Get MSI Information' subkey exists under 'shell', if not, create it.
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName") -ne $true) {
-      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Force -ErrorAction SilentlyContinue 
-    }
-
-    # Set the 'icon' value under 'Get MSI Information'
-    try {
-      New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $IconFilePath -PropertyType String -Force -ErrorAction SilentlyContinue
-    }
-    catch {
-      if ($Script:PowerShellPath) {
-        New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $Script:PowerShellPath.Path -PropertyType String -Force -ErrorAction SilentlyContinue
-      }
-      else {
-        New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
-      }
-    }
-   
-    # Check if the 'command' subkey exists under 'Get MSI Information', if not, create it.
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command") -ne $true) {
-      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Force -ErrorAction SilentlyContinue 
-    }
-
-    # Set the default value of the 'Get MSI Information' key to "Get MSI Information".
-    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name '(default)' -Value "$RightClickMenuName" -PropertyType String -Force -ea SilentlyContinue;
-
-    # Prefer pwsh 7.4+ so the menu launches directly and skips the slow relaunch.
-    # Fall back to Windows PowerShell (always present) when pwsh isn't installed.
-    if ($Script:PowerShellPath -and $Script:PowerShellPath.Version -ge [Version]"7.4") {
-      $CommandExe = $Script:PowerShellPath.Path
-    }
-    else {
-      $CommandExe = "C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe"
-    }
-
-    # Set the default value of the 'command' key to execute a PowerShell script with the .msi file as an argument.
-    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Name '(default)' -Value "`"$CommandExe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -Command `"$($DestinationFolder.FullName)\$($SaveAsScriptName)`" -FilePath '%1'" -PropertyType String -Force -ErrorAction SilentlyContinue;
-    Write-Host "Registry Modified:  [HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$($RightClickMenuName)]"
-    Write-Host "Installation Complete"
+    Install-RightClickMenu
   })
 
 $MenuItem_Uninstall.add_Click({
@@ -2292,17 +2376,45 @@ $MenuItem_CheckForUpdates.add_Click({
   })
 
 $MenuItem_UpdateAvailable.add_Click({
+    # Currently loaded MSI (if any) so the relaunched instance reopens it.
+    $currentFile = $Script:LoadedMSIPath
+
     switch ($Script:UpdateChannel) {
       'PSGallery' {
-        # TODO: Update-Script GetMSIInformation -Force, then offer relaunch.
-        Open-ReleasePage
+        # Let the Gallery replace the installed copy, then relaunch from its location.
+        try {
+          Write-Host "Updating via PowerShell Gallery: [Update-Script GetMSIInformation -Force]"
+          Update-Script -Name 'GetMSIInformation' -Force -ErrorAction Stop
+          $installed = Get-InstalledScript -Name 'GetMSIInformation' -ErrorAction SilentlyContinue
+          $updatedPath = if ($installed) { Join-Path $installed.InstalledLocation $Script:ScriptName } else { $PSCommandPath }
+          Restart-Script -ScriptPath $updatedPath -FilePath $currentFile
+        }
+        catch {
+          Write-Host "PSGallery update failed: $($_.Exception.Message)"
+          Open-ReleasePage
+        }
       }
       'RightClick' {
-        # TODO: refresh the LOCALAPPDATA copy + registry (reuse $MenuItem_Install logic).
-        Open-ReleasePage
+        # The LOCALAPPDATA copy is the running file: refresh it, re-apply the registry entry, relaunch.
+        if ($Script:LatestReleaseTag -and (Update-ScriptFile -ScriptPath $PSCommandPath -Tag $Script:LatestReleaseTag)) {
+          Install-RightClickMenu
+          Restart-Script -ScriptPath $PSCommandPath -FilePath $currentFile
+        }
+        else {
+          Open-ReleasePage
+        }
+      }
+      'LooseFile' {
+        # Replace the launched .ps1 in place, then relaunch; fall back to the releases page on failure.
+        if ($Script:LatestReleaseTag -and (Update-ScriptFile -ScriptPath $PSCommandPath -Tag $Script:LatestReleaseTag)) {
+          Restart-Script -ScriptPath $PSCommandPath -FilePath $currentFile
+        }
+        else {
+          Open-ReleasePage
+        }
       }
       default {
-        # Web / LooseFile (and any failure): open the releases page.
+        # Web (and any failure): open the releases page.
         Open-ReleasePage
       }
     }
@@ -2388,5 +2500,12 @@ foreach ($Button in $Buttons) {
 $Host.UI.RawUI.WindowTitle = "MSI Properties"
 
 #Show the WPF Window
+$formMSIProperties.Add_ContentRendered({
+    $formMSIProperties.Activate()
+    # Toggling Topmost raises the z-order without leaving the window pinned on top.
+    $formMSIProperties.Topmost = $true
+    $formMSIProperties.Topmost = $false
+    $formMSIProperties.Focus() | Out-Null
+  })
 $formMSIProperties.WindowStartupLocation = "CenterScreen"
 $formMSIProperties.ShowDialog() | Out-Null
