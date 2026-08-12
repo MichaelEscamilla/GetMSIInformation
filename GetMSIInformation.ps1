@@ -729,6 +729,7 @@ function Start-BackgroundUpdateCheck {
         try {
           $result = $Script:UpdatePowerShell.EndInvoke($Script:UpdateHandle) | Select-Object -First 1
           Write-Host "Background update check: UpdateAvailable=$($result.UpdateAvailable) | Installed [$($Script:ScriptVersion)] | Latest [$($result.LatestVersion)]"
+          Show-UpdateAvailable -Result $result
         }
         catch {
           Write-Host "Background update check failed: $($_.Exception.Message)"
@@ -742,6 +743,22 @@ function Start-BackgroundUpdateCheck {
   catch {
     Write-Host "Unable to start background update check: $($_.Exception.Message)"
   }
+}
+
+function Show-UpdateAvailable {
+  # Reveals the 'Update Available' menu item when a newer release exists, so both the background and
+  # manual checks surface the result the same way. Remembers the download link for the click handler.
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)]
+    $Result
+  )
+
+  if (-not $Result.UpdateAvailable) { return }
+
+  $Script:LatestReleaseUrl = if ($Result.HtmlUrl) { $Result.HtmlUrl } else { $Script:ReleasesPageUrl }
+  $MenuItem_UpdateAvailable.Header = "Update Available: v$($Result.LatestVersion)"
+  $MenuItem_UpdateAvailable.Visibility = [System.Windows.Visibility]::Visible
 }
 #endregion Functions
 
@@ -1439,6 +1456,11 @@ Add-Type -AssemblyName System.Windows.Forms
                   IsEnabled="False"
                   FontWeight="Normal"/>
             </MenuItem>
+            <MenuItem Name="MenuItem_UpdateAvailable"
+                Header="Update Available"
+                Visibility="Collapsed"
+                Background="{StaticResource Accent}"
+                Foreground="{StaticResource AccentText}"/>
           </Menu>
         </DockPanel>
       </Border>
@@ -2217,10 +2239,17 @@ $MenuItem_CheckForUpdates.add_Click({
     try {
       $result = & $Script:TestForUpdate $Script:ReleasesApiUrl $Script:UpdateCheckHeaders $Script:ScriptVersion
       Write-Host "Update available: $($result.UpdateAvailable) | Installed [$($Script:ScriptVersion)] | Latest [$($result.LatestVersion)]"
+      Show-UpdateAvailable -Result $result
     }
     catch {
       Write-Host "Update check failed: $($_.Exception.Message)"
     }
+  })
+
+$MenuItem_UpdateAvailable.add_Click({
+    # Open the download page for the newer release.
+    if ($Script:LatestReleaseUrl) { Start-Process $Script:LatestReleaseUrl }
+    else { Start-Process $Script:ReleasesPageUrl }
   })
 
 #### Title Bar Handlers ####
