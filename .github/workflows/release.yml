@@ -29,12 +29,12 @@ jobs:
           $version = "${{ steps.ver.outputs.version }}"
           if ($env:GITHUB_REF -eq 'refs/heads/main') {
             $tag = "$version"
-            $name = "$env:GITHUB_REPOSITORY $version"
+            $name = "${{ github.event.repository.name }} $version"
             $prerelease = 'false'
             Write-Host "main branch -> stable release $tag"
           } else {
-            $tag = "$version-test.${{ github.run_number }}"
-            $name = "$env:GITHUB_REPOSITORY $version (Pre-release)"
+            $tag = "$version-rc.${{ github.run_number }}"
+            $name = "${{ github.event.repository.name }} $version"
             $prerelease = 'true'
             Write-Host "non-main branch -> pre-release $tag"
           }
