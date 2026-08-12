@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.8.11.0
+.VERSION 2026.8.11.1
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -38,6 +38,9 @@
 2026.8.11.0   - Updated UI for less 'default' look.
                 Added the Compressed Product Code (Compressed GUID) to the GUI.
                 Right-Click Install will directly call pwsh.exe if available.
+2026.8.11.1   - Added a check for updates feature.
+                Manual check available under the 'About' menu.
+                A non-blocking background check runs at startup and notifies via the status bar when a newer release is available.
 
 .PRIVATEDATA
 
@@ -70,12 +73,20 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.8.11.0"
-# Right-Click Menu
+[System.Version]$Script:ScriptVersion = "2026.8.10.0"
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 # Icon Temp Folder Path
 $Script:IconTempFolderPath = "$env:TEMP\GetMSIInformation\Icons"
+# GitHub Repository (used for the update check)
+$Script:GitHubRepo = "MichaelEscamilla/GetMSIInformation"
+$Script:ReleasesApiUrl = "https://api.github.com/repos/$Script:GitHubRepo/releases/latest"
+$Script:ReleasesPageUrl = "https://github.com/$Script:GitHubRepo/releases"
+# Headers required by the GitHub REST API (a User-Agent is mandatory)
+$Script:UpdateCheckHeaders = @{
+  'User-Agent' = 'GetMSIInformation-UpdateCheck'
+  'Accept'     = 'application/vnd.github+json'
+}
 # Get the Security Principal
 $Script:currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 # Get PowerShell Version
@@ -674,6 +685,62 @@ function Invoke-LaunchAsPwsh {
     else {
       Write-Host "PowerShell (pwsh.exe) is not installed on this system."
     }
+  }
+}
+
+# Fetches the latest published GitHub release and reports whether it is newer than $CurrentVersion.
+# Authored as a scriptblock so the exact same logic is used by the manual menu check (invoked directly)
+# and by the background check (the same scriptblock is handed to a runspace). Takes only arguments,
+# so it carries no dependencies into the runspace.
+$Script:TestForUpdate = {
+  param(
+    [string]$ApiUrl,
+    [hashtable]$Headers,
+    [System.Version]$CurrentVersion
+  )
+  $release = Invoke-RestMethod -Uri $ApiUrl -Headers $Headers -TimeoutSec 10 -ErrorAction Stop
+  $latestVersion = [System.Version]($release.tag_name -replace '^v', '')
+  [PSCustomObject]@{
+    UpdateAvailable = ($latestVersion -gt $CurrentVersion)
+    LatestVersion   = $latestVersion
+    HtmlUrl         = $release.html_url
+  }
+}
+
+function Start-BackgroundUpdateCheck {
+  # Runs $Script:TestForUpdate on its own runspace/thread so the network call never blocks the UI,
+  # then polls for completion on the UI thread. UI treatment is deferred; for now it just reports the result.
+  [CmdletBinding()]
+  param()
+
+  try {
+    $Script:UpdatePowerShell = [powershell]::Create()
+    $Script:UpdatePowerShell.AddScript($Script:TestForUpdate).
+      AddArgument($Script:ReleasesApiUrl).
+      AddArgument($Script:UpdateCheckHeaders).
+      AddArgument($Script:ScriptVersion) | Out-Null
+    $Script:UpdateHandle = $Script:UpdatePowerShell.BeginInvoke()
+
+    $Script:UpdateTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $Script:UpdateTimer.Interval = [TimeSpan]::FromMilliseconds(500)
+    $Script:UpdateTimer.Add_Tick({
+        if (-not $Script:UpdateHandle.IsCompleted) { return }
+        $Script:UpdateTimer.Stop()
+        try {
+          $result = $Script:UpdatePowerShell.EndInvoke($Script:UpdateHandle) | Select-Object -First 1
+          Write-Host "Background update check: UpdateAvailable=$($result.UpdateAvailable) | Installed [$($Script:ScriptVersion)] | Latest [$($result.LatestVersion)]"
+        }
+        catch {
+          Write-Host "Background update check failed: $($_.Exception.Message)"
+        }
+        finally {
+          $Script:UpdatePowerShell.Dispose()
+        }
+      })
+    $Script:UpdateTimer.Start()
+  }
+  catch {
+    Write-Host "Unable to start background update check: $($_.Exception.Message)"
   }
 }
 #endregion Functions
@@ -1365,6 +1432,8 @@ Add-Type -AssemblyName System.Windows.Forms
                   Header="GitHub - GetMSIInformation"/>
               <MenuItem Name="MenuItem_About"
                   Header="michaeltheadmin.com"/>
+              <MenuItem Name="MenuItem_CheckForUpdates"
+                  Header="Check for Updates"/>
               <MenuItem Name="MenuItem_Version"
                   Header="Version 1.0.0"
                   IsEnabled="False"
@@ -1910,6 +1979,9 @@ $formMSIProperties.Add_Loaded({
     $MenuItem_Version.Header = "Version $($ScriptVersion)"
     $txtblk_TitleVersion.Text = " $($ScriptVersion)"
 
+    # Background update check (non-blocking).
+    Start-BackgroundUpdateCheck
+
     # Check if the FilePath parameter is provided to script
     if ($FilePath) {
       # Check if $FilePath is locked
@@ -2137,6 +2209,18 @@ $MenuItem_GitHub.add_Click({
 $MenuItem_About.add_Click({
     # Open Blog
     Start-Process "https://michaeltheadmin.com"
+  })
+
+$MenuItem_CheckForUpdates.add_Click({
+    # Manual check. User-initiated, so running the shared scriptblock synchronously is fine.
+    Write-Host "Checking for updates: [$($Script:ReleasesApiUrl)]"
+    try {
+      $result = & $Script:TestForUpdate $Script:ReleasesApiUrl $Script:UpdateCheckHeaders $Script:ScriptVersion
+      Write-Host "Update available: $($result.UpdateAvailable) | Installed [$($Script:ScriptVersion)] | Latest [$($result.LatestVersion)]"
+    }
+    catch {
+      Write-Host "Update check failed: $($_.Exception.Message)"
+    }
   })
 
 #### Title Bar Handlers ####
