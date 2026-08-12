@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.8.11.1
+.VERSION 2026.8.12.0
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -38,7 +38,7 @@
 2026.8.11.0   - Updated UI for less 'default' look.
                 Added the Compressed Product Code (Compressed GUID) to the GUI.
                 Right-Click Install will directly call pwsh.exe if available.
-2026.8.11.1   - Added a check for updates feature.
+2026.8.12.0   - Added a check for updates feature.
                 Manual check available under the 'About' menu.
                 A non-blocking background check runs at startup and notifies via the status bar when a newer release is available.
 
@@ -73,7 +73,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.8.10.0"
+[System.Version]$Script:ScriptVersion = "2026.8.12.0"
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 # Icon Temp Folder Path
@@ -87,6 +87,8 @@ $Script:UpdateCheckHeaders = @{
   'User-Agent' = 'GetMSIInformation-UpdateCheck'
   'Accept'     = 'application/vnd.github+json'
 }
+# How this script was launched; drives which update action the 'Update Available' click takes.
+$Script:UpdateChannel = $null
 # Get the Security Principal
 $Script:currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 # Get PowerShell Version
@@ -688,10 +690,7 @@ function Invoke-LaunchAsPwsh {
   }
 }
 
-# Fetches the latest published GitHub release and reports whether it is newer than $CurrentVersion.
-# Authored as a scriptblock so the exact same logic is used by the manual menu check (invoked directly)
-# and by the background check (the same scriptblock is handed to a runspace). Takes only arguments,
-# so it carries no dependencies into the runspace.
+# Authored as a scriptblock because it's passed to a runspace).
 $Script:TestForUpdate = {
   param(
     [string]$ApiUrl,
@@ -708,10 +707,15 @@ $Script:TestForUpdate = {
 }
 
 function Start-BackgroundUpdateCheck {
-  # Runs $Script:TestForUpdate on its own runspace/thread so the network call never blocks the UI,
-  # then polls for completion on the UI thread. UI treatment is deferred; for now it just reports the result.
   [CmdletBinding()]
-  param()
+  param([switch]$Manual)
+
+  # Don't start a second check while one is still running (e.g. manual click during the startup check).
+  if ($Script:UpdateHandle -and -not $Script:UpdateHandle.IsCompleted) { return }
+  $Script:UpdateCheckManual = $Manual.IsPresent
+
+  # Detect the distribution channel once so the update click is a cheap lookup.
+  if (-not $Script:UpdateChannel) { $Script:UpdateChannel = Get-UpdateChannel }
 
   try {
     $Script:UpdatePowerShell = [powershell]::Create()
@@ -730,9 +734,17 @@ function Start-BackgroundUpdateCheck {
           $result = $Script:UpdatePowerShell.EndInvoke($Script:UpdateHandle) | Select-Object -First 1
           Write-Host "Background update check: UpdateAvailable=$($result.UpdateAvailable) | Installed [$($Script:ScriptVersion)] | Latest [$($result.LatestVersion)]"
           Show-UpdateAvailable -Result $result
+          # Manual check only: confirm when already current (an available update is surfaced by the menu item).
+          if ($Script:UpdateCheckManual -and -not $result.UpdateAvailable) {
+            #TODO: Add a "You're running the latest version" message to the GUI instead of a MessageBox.
+            [System.Windows.MessageBox]::Show("You're running the latest version (v$($Script:ScriptVersion)).", "Check for Updates", 'OK', 'Information') | Out-Null
+          }
         }
         catch {
           Write-Host "Background update check failed: $($_.Exception.Message)"
+          if ($Script:UpdateCheckManual) {
+            [System.Windows.MessageBox]::Show("Update check failed:`n$($_.Exception.Message)", "Check for Updates", 'OK', 'Warning') | Out-Null
+          }
         }
         finally {
           $Script:UpdatePowerShell.Dispose()
@@ -759,6 +771,47 @@ function Show-UpdateAvailable {
   $Script:LatestReleaseUrl = if ($Result.HtmlUrl) { $Result.HtmlUrl } else { $Script:ReleasesPageUrl }
   $MenuItem_UpdateAvailable.Header = "Update Available: v$($Result.LatestVersion)"
   $MenuItem_UpdateAvailable.Visibility = [System.Windows.Visibility]::Visible
+}
+
+function Get-UpdateChannel {
+  # Detects how the script was launched so the update action can match the channel.
+  # Cached once in $Script:UpdateChannel; ordering matters because RightClick and LooseFile
+  # both have a non-empty $PSCommandPath.
+  [CmdletBinding()]
+  param()
+
+  # Web: launched via iex (irm ...); nothing on disk to update, next launch is always latest.
+  if ([string]::IsNullOrEmpty($PSCommandPath)) {
+    $channel = 'Web'
+  }
+  else {
+    $scriptFolder = Split-Path -Path $PSCommandPath -Parent
+
+    # Right-click install: running from the LOCALAPPDATA copy.
+    if ($scriptFolder -eq $Script:RightClickMenuFolderPath) {
+      $channel = 'RightClick'
+    }
+    else {
+      # PowerShell Gallery install: Install-Script location matches where we're running from.
+      $installed = Get-InstalledScript -Name 'GetMSIInformation' -ErrorAction SilentlyContinue
+      if ($installed -and $installed.InstalledLocation -eq $scriptFolder) {
+        $channel = 'PSGallery'
+      }
+      else {
+        # Anything else: a loose .ps1 on disk.
+        $channel = 'LooseFile'
+      }
+    }
+  }
+
+  Write-Host "Update channel: [$channel]"
+  return $channel
+}
+
+function Open-ReleasePage {
+  # Universal fallback for the update action: open the newer release (or the releases list).
+  if ($Script:LatestReleaseUrl) { Start-Process $Script:LatestReleaseUrl }
+  else { Start-Process $Script:ReleasesPageUrl }
 }
 #endregion Functions
 
@@ -2234,22 +2287,25 @@ $MenuItem_About.add_Click({
   })
 
 $MenuItem_CheckForUpdates.add_Click({
-    # Manual check. User-initiated, so running the shared scriptblock synchronously is fine.
     Write-Host "Checking for updates: [$($Script:ReleasesApiUrl)]"
-    try {
-      $result = & $Script:TestForUpdate $Script:ReleasesApiUrl $Script:UpdateCheckHeaders $Script:ScriptVersion
-      Write-Host "Update available: $($result.UpdateAvailable) | Installed [$($Script:ScriptVersion)] | Latest [$($result.LatestVersion)]"
-      Show-UpdateAvailable -Result $result
-    }
-    catch {
-      Write-Host "Update check failed: $($_.Exception.Message)"
-    }
+    Start-BackgroundUpdateCheck -Manual
   })
 
 $MenuItem_UpdateAvailable.add_Click({
-    # Open the download page for the newer release.
-    if ($Script:LatestReleaseUrl) { Start-Process $Script:LatestReleaseUrl }
-    else { Start-Process $Script:ReleasesPageUrl }
+    switch ($Script:UpdateChannel) {
+      'PSGallery' {
+        # TODO: Update-Script GetMSIInformation -Force, then offer relaunch.
+        Open-ReleasePage
+      }
+      'RightClick' {
+        # TODO: refresh the LOCALAPPDATA copy + registry (reuse $MenuItem_Install logic).
+        Open-ReleasePage
+      }
+      default {
+        # Web / LooseFile (and any failure): open the releases page.
+        Open-ReleasePage
+      }
+    }
   })
 
 #### Title Bar Handlers ####
