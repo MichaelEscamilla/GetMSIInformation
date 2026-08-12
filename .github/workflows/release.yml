@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get script version
+        id: ver
+        shell: pwsh
+        run: |
+          $match = Select-String -Path GetMSIInformation.ps1 -Pattern '\.VERSION\s+([\d.]+)' | Select-Object -First 1
+          if (-not $match) { throw "Could not find .VERSION in GetMSIInformation.ps1" }
+          $version = $match.Matches[0].Groups[1].Value
+          Write-Host "Detected version: $version"
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Check if release already exists
+        id: check
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v${{ steps.ver.outputs.version }}"
+          $exists = gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag already exists. Skipping."
+            "exists=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "Release $tag does not exist. Will create."
+            "exists=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Extract changelog notes
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.ver.outputs.version }}"
+          $escaped = [regex]::Escape($version)
+          $notes = New-Object System.Collections.Generic.List[string]
+          $capturing = $false
+          foreach ($line in (Get-Content GetMSIInformation.ps1)) {
+            if ($capturing) {
+              # Continuation lines are indented; stop at the next entry, blank line, or section.
+              if ($line -match '^\s+\S') { $notes.Add($line.Trim()); continue } else { break }
+            }
+            if ($line -match "^$escaped\s+-\s*(.*)") {
+              $capturing = $true
+              $first = $Matches[1].Trim()
+              if ($first) { $notes.Add($first) }
+            }
+          }
+          if ($notes.Count -eq 0) {
+            Write-Host "No changelog entry found for $version; falling back to generated notes."
+            "## What's Changed`n`nRelease v$version" | Set-Content release_notes.md
+          } else {
+            $body = "## What's Changed`n`n" + (($notes | ForEach-Object { "- $_" }) -join "`n")
+            $body | Set-Content release_notes.md
+            Write-Host $body
+          }
+
+      - name: Create release
+        if: steps.check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: v${{ steps.ver.outputs.version }}
+          files: GetMSIInformation.ps1
+          body_path: release_notes.md
+          fail_on_unmatched_files: true
