@@ -30,17 +30,17 @@ jobs:
           if ($env:GITHUB_REF -eq 'refs/heads/main') {
             $tag = "$version"
             $name = "${{ github.event.repository.name }} $version"
-            $prerelease = 'false'
-            Write-Host "main branch -> stable release $tag"
+            $draft = 'false'
+            Write-Host "main branch -> published release $tag"
           } else {
             $tag = "$version-rc.${{ github.run_number }}"
             $name = "${{ github.event.repository.name }} $version"
-            $prerelease = 'true'
-            Write-Host "non-main branch -> pre-release $tag"
+            $draft = 'true'
+            Write-Host "non-main branch -> draft release $tag"
           }
           "tag=$tag" >> $env:GITHUB_OUTPUT
           "name=$name" >> $env:GITHUB_OUTPUT
-          "prerelease=$prerelease" >> $env:GITHUB_OUTPUT
+          "draft=$draft" >> $env:GITHUB_OUTPUT
 
       - name: Check if release already exists
         id: check
@@ -94,7 +94,7 @@ jobs:
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: ${{ steps.meta.outputs.name }}
-          prerelease: ${{ steps.meta.outputs.prerelease }}
+          draft: ${{ steps.meta.outputs.draft }}
           files: GetMSIInformation.ps1
           body_path: release_notes.md
           fail_on_unmatched_files: true
