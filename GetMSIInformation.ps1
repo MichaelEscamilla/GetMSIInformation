@@ -744,8 +744,7 @@ function Start-BackgroundUpdateCheck {
           Show-UpdateAvailable -Result $result
           # Manual check only: confirm when already current (an available update is surfaced by the menu item).
           if ($Script:UpdateCheckManual -and -not $result.UpdateAvailable) {
-            #TODO: Add a "You're running the latest version" message to the GUI instead of a MessageBox.
-            [System.Windows.MessageBox]::Show("You're running the latest version (v$($Script:ScriptVersion)).", "Check for Updates", 'OK', 'Information') | Out-Null
+            Set-StatusMessage -Message "You're running the latest version ($($Script:ScriptVersion))." -Type Success
           }
         }
         catch {
@@ -780,6 +779,53 @@ function Show-UpdateAvailable {
   $Script:LatestReleaseTag = $Result.Tag
   $MenuItem_UpdateAvailable.Header = "Update Available: $($Result.LatestVersion)"
   $MenuItem_UpdateAvailable.Visibility = [System.Windows.Visibility]::Visible
+}
+
+function Set-StatusMessage {
+  # Flashes a temporary message in the status bar, then restores the previous text after a few seconds.
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Message,
+
+    [ValidateSet('Success', 'Danger', 'Accent', 'Muted')]
+    [string]$Type = 'Success'
+  )
+
+  if (-not $txtblk_StatusBar) { return }
+
+  $brushKey = switch ($Type) {
+    'Success' { 'Success' }
+    'Danger' { 'Danger' }
+    'Accent' { 'Accent' }
+    default { 'TextMuted' }
+  }
+
+  # Snapshot the resting state so the revert restores whatever was there before, not a hardcoded string.
+  # Only capture when the bar is at rest; otherwise a rapid second flash would capture the first transient.
+  if (-not ($Script:StatusTimer -and $Script:StatusTimer.IsEnabled)) {
+    $Script:StatusRestoreText = $txtblk_StatusBar.Text
+    $Script:StatusRestoreBrush = $txtblk_StatusBar.Foreground
+    $Script:StatusRestoreWeight = $txtblk_StatusBar.FontWeight
+  }
+
+  $txtblk_StatusBar.Text = $Message
+  $txtblk_StatusBar.Foreground = $formMSIProperties.FindResource($brushKey)
+  $txtblk_StatusBar.FontWeight = [System.Windows.FontWeights]::SemiBold
+
+  # Reuse a single timer so rapid clicks don't stack revert callbacks.
+  if (-not $Script:StatusTimer) {
+    $Script:StatusTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $Script:StatusTimer.Add_Tick({
+        $Script:StatusTimer.Stop()
+        $txtblk_StatusBar.Text = $Script:StatusRestoreText
+        $txtblk_StatusBar.Foreground = $Script:StatusRestoreBrush
+        $txtblk_StatusBar.FontWeight = $Script:StatusRestoreWeight
+      })
+  }
+  $Script:StatusTimer.Stop()
+  $Script:StatusTimer.Interval = [TimeSpan]::FromSeconds(4)
+  $Script:StatusTimer.Start()
 }
 
 function Get-UpdateChannel {
@@ -1044,6 +1090,8 @@ Add-Type -AssemblyName System.Windows.Forms
         Color="#1C1917"/>
     <SolidColorBrush x:Key="Danger"
         Color="#EF4444"/>
+    <SolidColorBrush x:Key="Success"
+        Color="#22C55E"/>
 
     <!-- Menu item templates -->
     <ControlTemplate x:Key="MenuTopLevelHeader"
@@ -2335,6 +2383,7 @@ $MenuItem_Open.add_Click({
 $MenuItem_Install.add_Click({
     Write-Host "Menu Item Install Clicked"
     Install-RightClickMenu
+    Set-StatusMessage -Message "Right-click menu installed." -Type Success
   })
 
 $MenuItem_Uninstall.add_Click({
@@ -2350,6 +2399,7 @@ $MenuItem_Uninstall.add_Click({
     }
     Write-Host "Deleted Registry: [HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$($RightClickMenuName)]"
     Write-Host "Uninstallation Complete"
+    Set-StatusMessage -Message "Right-click menu removed." -Type Danger
   })
 
 $MenuItem_Open_RCM.add_Click({
