@@ -778,7 +778,7 @@ function Show-UpdateAvailable {
 
   $Script:LatestReleaseUrl = if ($Result.HtmlUrl) { $Result.HtmlUrl } else { $Script:ReleasesPageUrl }
   $Script:LatestReleaseTag = $Result.Tag
-  $MenuItem_UpdateAvailable.Header = "Update Available: v$($Result.LatestVersion)"
+  $MenuItem_UpdateAvailable.Header = "Update Available: $($Result.LatestVersion)"
   $MenuItem_UpdateAvailable.Visibility = [System.Windows.Visibility]::Visible
 }
 
@@ -1119,7 +1119,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Value="True">
           <Setter TargetName="Bd"
               Property="Background"
-              Value="{StaticResource Accent}"/>
+              Value="{StaticResource AccentHover}"/>
           <Setter Property="Foreground"
               Value="{StaticResource AccentText}"/>
         </Trigger>
@@ -1691,7 +1691,8 @@ Add-Type -AssemblyName System.Windows.Forms
                 Header="Update Available"
                 Visibility="Collapsed"
                 Background="{StaticResource Accent}"
-                Foreground="{StaticResource AccentText}"/>
+                Foreground="{StaticResource AccentText}"
+                FontWeight="Bold"/>
           </Menu>
         </DockPanel>
       </Border>
