@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.8.12.1
+.VERSION 2026.8.12.2
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -42,6 +42,8 @@
                 Manual check available under the 'About' menu.
                 A non-blocking background check runs at startup and notifies via the status bar when a newer release is available.
 2026.8.12.1   - Added Logic to Update the script depending on the way it was launched.
+2026.8.12.2   - Added status bar feedback when installing or removing the right-click menu.
+                The 'latest version' confirmation now shows in the status bar instead of a pop-up.
 
 .PRIVATEDATA
 
@@ -74,7 +76,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.8.12.1"
+[System.Version]$Script:ScriptVersion = "2026.8.12.2"
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 # Icon Temp Folder Path
