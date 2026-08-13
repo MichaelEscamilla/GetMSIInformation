@@ -842,8 +842,19 @@ function Get-WindowBitmap {
   $pixelWidth = [int][Math]::Ceiling($formMSIProperties.ActualWidth * $scaleX)
   $pixelHeight = [int][Math]::Ceiling($formMSIProperties.ActualHeight * $scaleY)
 
-  $rtb = New-Object System.Windows.Media.Imaging.RenderTargetBitmap($pixelWidth, $pixelHeight, (96 * $scaleX), (96 * $scaleY), [System.Windows.Media.PixelFormats]::Pbgra32)
-  $rtb.Render($formMSIProperties)
+  # Suppress hit-testing during the render so a control under the cursor (e.g. a textbox left
+  # hovered after the menu closes) doesn't capture its IsMouseOver accent state.
+  $formMSIProperties.IsHitTestVisible = $false
+  [System.Windows.Input.Mouse]::Synchronize()
+  $formMSIProperties.UpdateLayout()
+  try {
+    $rtb = New-Object System.Windows.Media.Imaging.RenderTargetBitmap($pixelWidth, $pixelHeight, (96 * $scaleX), (96 * $scaleY), [System.Windows.Media.PixelFormats]::Pbgra32)
+    $rtb.Render($formMSIProperties)
+  }
+  finally {
+    $formMSIProperties.IsHitTestVisible = $true
+    [System.Windows.Input.Mouse]::Synchronize()
+  }
   return $rtb
 }
 
@@ -1765,7 +1776,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Foreground="{StaticResource TextMuted}"
             FontSize="12"
             Margin="12,0"
-            Text="Created By Michael Escamilla"/>
+            Text="Created By Michael Escamilla | michaeltheadmin.com"/>
       </Border>
 
       <Grid>
