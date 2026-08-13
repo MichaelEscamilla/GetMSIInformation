@@ -830,6 +830,23 @@ function Set-StatusMessage {
   $Script:StatusTimer.Start()
 }
 
+function Get-WindowBitmap {
+  # Renders the window's visual tree to a bitmap at the current DPI so the capture is crisp on scaled displays.
+  [CmdletBinding()]
+  param()
+
+  $source = [System.Windows.PresentationSource]::FromVisual($formMSIProperties)
+  $scaleX = if ($source) { $source.CompositionTarget.TransformToDevice.M11 } else { 1 }
+  $scaleY = if ($source) { $source.CompositionTarget.TransformToDevice.M22 } else { 1 }
+
+  $pixelWidth = [int][Math]::Ceiling($formMSIProperties.ActualWidth * $scaleX)
+  $pixelHeight = [int][Math]::Ceiling($formMSIProperties.ActualHeight * $scaleY)
+
+  $rtb = New-Object System.Windows.Media.Imaging.RenderTargetBitmap($pixelWidth, $pixelHeight, (96 * $scaleX), (96 * $scaleY), [System.Windows.Media.PixelFormats]::Pbgra32)
+  $rtb.Render($formMSIProperties)
+  return $rtb
+}
+
 function Get-UpdateChannel {
   # Detects how the script was launched so the update action can match the channel.
   # Cached once in $Script:UpdateChannel; ordering matters because RightClick and LooseFile
@@ -1373,12 +1390,6 @@ Add-Type -AssemblyName System.Windows.Forms
                   Value="True">
                 <Setter TargetName="Bd"
                     Property="BorderBrush"
-                    Value="{StaticResource BorderMuted}"/>
-              </Trigger>
-              <Trigger Property="IsKeyboardFocused"
-                  Value="True">
-                <Setter TargetName="Bd"
-                    Property="BorderBrush"
                     Value="{StaticResource Accent}"/>
               </Trigger>
             </ControlTemplate.Triggers>
@@ -1561,12 +1572,6 @@ Add-Type -AssemblyName System.Windows.Forms
                     Property="Background"
                     Value="{StaticResource Surface2}"/>
               </Trigger>
-              <Trigger Property="IsSelected"
-                  Value="True">
-                <Setter TargetName="Bd"
-                    Property="Background"
-                    Value="{StaticResource Surface2}"/>
-              </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
@@ -1716,6 +1721,11 @@ Add-Type -AssemblyName System.Windows.Forms
             <MenuItem Header="File">
               <MenuItem Name="MenuItem_Open"
                   Header="Open Icon Temp Folder"/>
+              <Separator/>
+              <MenuItem Name="MenuItem_ScreenshotCopy"
+                  Header="Copy Screenshot to Clipboard"/>
+              <MenuItem Name="MenuItem_ScreenshotSave"
+                  Header="Save Screenshot..."/>
             </MenuItem>
             <MenuItem Header="Right Click Menu">
               <MenuItem Name="MenuItem_Install"
@@ -2275,6 +2285,7 @@ $formMSIProperties.Add_Loaded({
 
       # Make the warning message bold and yellow
       $lsbox_FilePath.Background = [System.Windows.Media.Brushes]::Yellow
+      $lsbox_FilePath.Foreground = [System.Windows.Media.Brushes]::Black
       $lsbox_FilePath.FontWeight = 'Bold'
     }
 
@@ -2380,6 +2391,41 @@ $MenuItem_Open.add_Click({
       New-Item -ItemType Directory -Path $Script:IconTempFolderPath -ErrorAction SilentlyContinue
     }
     Invoke-Item -Path $Script:IconTempFolderPath
+  })
+
+$MenuItem_ScreenshotCopy.add_Click({
+    try {
+      $bitmap = Get-WindowBitmap
+      [System.Windows.Clipboard]::SetImage($bitmap)
+      Set-StatusMessage -Message "Screenshot copied to clipboard." -Type Success
+    }
+    catch {
+      Write-Warning "Failed to copy screenshot: $_"
+      Set-StatusMessage -Message "Failed to copy screenshot." -Type Danger
+    }
+  })
+
+$MenuItem_ScreenshotSave.add_Click({
+    try {
+      $dialog = New-Object System.Windows.Forms.SaveFileDialog
+      $dialog.Filter = "PNG Image (*.png)|*.png"
+      $dialog.Title = "Save Screenshot"
+      $dialog.FileName = "MSIProperties_$(Get-Date -Format 'yyyyMMdd_HHmmss').png"
+      if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
+
+      $bitmap = Get-WindowBitmap
+      $encoder = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
+      $encoder.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($bitmap))
+      $stream = [System.IO.File]::Create($dialog.FileName)
+      try { $encoder.Save($stream) } finally { $stream.Dispose() }
+
+      Write-Host "Screenshot saved: [$($dialog.FileName)]"
+      Set-StatusMessage -Message "Screenshot saved." -Type Success
+    }
+    catch {
+      Write-Warning "Failed to save screenshot: $_"
+      Set-StatusMessage -Message "Failed to save screenshot." -Type Danger
+    }
   })
 
 $MenuItem_Install.add_Click({
