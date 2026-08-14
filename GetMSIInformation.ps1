@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.8.12.2
+.VERSION 2026.8.13.0
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -44,6 +44,9 @@
 2026.8.12.1   - Added Logic to Update the script depending on the way it was launched.
 2026.8.12.2   - Added status bar feedback when installing or removing the right-click menu.
                 The 'latest version' confirmation now shows in the status bar instead of a pop-up.
+2026.8.13.0   - Added screenshot options under the File menu to copy the window to the clipboard or save it as a PNG.
+                Fixed the drag-and-drop box staying highlighted gray after being clicked.
+                Property fields now show the accent outline on hover instead of staying outlined after clicking.
 
 .PRIVATEDATA
 
@@ -76,7 +79,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.8.12.2"
+[System.Version]$Script:ScriptVersion = "2026.8.13.0"
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 # Icon Temp Folder Path
@@ -1328,13 +1331,14 @@ Add-Type -AssemblyName System.Windows.Forms
         </Trigger>
       </Style.Triggers>
     </Style>
-    <Style TargetType="Separator">
+    <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}"
+        TargetType="Separator">
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Separator">
             <Border Height="1"
                 Background="{StaticResource Border}"
-                Margin="8,4"/>
+                Margin="0,4"/>
           </ControlTemplate>
         </Setter.Value>
       </Setter>
@@ -1753,6 +1757,7 @@ Add-Type -AssemblyName System.Windows.Forms
                   Header="michaeltheadmin.com"/>
               <MenuItem Name="MenuItem_CheckForUpdates"
                   Header="Check for Updates"/>
+              <Separator/>
               <MenuItem Name="MenuItem_Version"
                   Header="Version 1.0.0"
                   IsEnabled="False"
@@ -2006,80 +2011,11 @@ Add-Type -AssemblyName System.Windows.Forms
             <ColumnDefinition Width="60"/>
           </Grid.ColumnDefinitions>
           <Grid.Resources>
+            <!-- Denser labels than the themed base style; buttons are disabled at load by Disable-AllButtons. -->
             <Style TargetType="Label"
                 BasedOn="{StaticResource ThemedLabel}">
-              <Setter Property="Margin"
-                      Value="2.5"/>
               <Setter Property="FontSize"
                       Value="12"/>
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="HorizontalContentAlignment"
-                      Value="Right"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="IsEnabled"
-                      Value="True"/>
-            </Style>
-            <Style TargetType="TextBox"
-                BasedOn="{StaticResource ThemedTextBox}">
-              <Setter Property="Margin"
-                      Value="2.5"/>
-              <Setter Property="Width"
-                      Value="Auto"/>
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="IsEnabled"
-                      Value="True"/>
-              <Setter Property="IsReadOnly"
-                      Value="True"/>
-            </Style>
-            <Style TargetType="Button"
-                BasedOn="{StaticResource ThemedButton}">
-              <Setter Property="Margin"
-                      Value="2.5"/>
-              <Setter Property="Width"
-                      Value="Auto"/>
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="IsEnabled"
-                      Value="False"/>
-            </Style>
-            <Style TargetType="ListBox"
-                BasedOn="{StaticResource ThemedListBox}">
-              <Setter Property="Margin"
-                      Value="2.5"/>
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="HorizontalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-            </Style>
-            <Style TargetType="ListBoxItem"
-                BasedOn="{StaticResource ThemedListBoxItem}">
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="HorizontalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="Height"
-                      Value="{Binding ElementName=lsbox_FilePath, Path=ActualHeight}"/>
             </Style>
           </Grid.Resources>
 
@@ -2104,8 +2040,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="1"
             Grid.Column="2"
             Name="btn_ProductName_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
           <!-- Row -->
@@ -2123,8 +2058,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="2"
             Grid.Column="2"
             Name="btn_Manufacture_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2142,8 +2076,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="3"
             Grid.Column="2"
             Name="btn_ProductVersion_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2161,8 +2094,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="4"
             Grid.Column="2"
             Name="btn_ProductCode_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2180,8 +2112,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="5"
             Grid.Column="2"
             Name="btn_CompressedGUID_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2199,8 +2130,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="6"
             Grid.Column="2"
             Name="btn_UpgradeCode_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2208,14 +2138,12 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="7"
             Grid.Column="0"
             Name="btn_AllProperties"
-            Content="All Properties"
-            IsEnabled="False"/>
+            Content="All Properties"/>
         <ListBox
             Grid.Row="7"
             Grid.Column="1"
             Name="lsbox_FilePath"
             AllowDrop="True"
-            IsEnabled="True"
             TabIndex="0">
           <ListBox.Items>
             <ListBoxItem>
@@ -2239,8 +2167,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="7"
             Grid.Column="2"
             Name="btn_FilePath_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
       </Grid>
       </Grid>
