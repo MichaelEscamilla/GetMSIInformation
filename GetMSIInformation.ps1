@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.8.12.2
+.VERSION 2026.8.13.0
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -44,6 +44,9 @@
 2026.8.12.1   - Added Logic to Update the script depending on the way it was launched.
 2026.8.12.2   - Added status bar feedback when installing or removing the right-click menu.
                 The 'latest version' confirmation now shows in the status bar instead of a pop-up.
+2026.8.13.0   - Added screenshot options under the File menu to copy the window to the clipboard or save it as a PNG.
+                Fixed the drag-and-drop box staying highlighted gray after being clicked.
+                Property fields now show the accent outline on hover instead of staying outlined after clicking.
 
 .PRIVATEDATA
 
@@ -76,7 +79,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.8.12.2"
+[System.Version]$Script:ScriptVersion = "2026.8.13.0"
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 # Icon Temp Folder Path
@@ -830,6 +833,34 @@ function Set-StatusMessage {
   $Script:StatusTimer.Start()
 }
 
+function Get-WindowBitmap {
+  # Renders the window's visual tree to a bitmap at the current DPI so the capture is crisp on scaled displays.
+  [CmdletBinding()]
+  param()
+
+  $source = [System.Windows.PresentationSource]::FromVisual($formMSIProperties)
+  $scaleX = if ($source) { $source.CompositionTarget.TransformToDevice.M11 } else { 1 }
+  $scaleY = if ($source) { $source.CompositionTarget.TransformToDevice.M22 } else { 1 }
+
+  $pixelWidth = [int][Math]::Ceiling($formMSIProperties.ActualWidth * $scaleX)
+  $pixelHeight = [int][Math]::Ceiling($formMSIProperties.ActualHeight * $scaleY)
+
+  # Suppress hit-testing during the render so a control under the cursor (e.g. a textbox left
+  # hovered after the menu closes) doesn't capture its IsMouseOver accent state.
+  $formMSIProperties.IsHitTestVisible = $false
+  [System.Windows.Input.Mouse]::Synchronize()
+  $formMSIProperties.UpdateLayout()
+  try {
+    $rtb = New-Object System.Windows.Media.Imaging.RenderTargetBitmap($pixelWidth, $pixelHeight, (96 * $scaleX), (96 * $scaleY), [System.Windows.Media.PixelFormats]::Pbgra32)
+    $rtb.Render($formMSIProperties)
+  }
+  finally {
+    $formMSIProperties.IsHitTestVisible = $true
+    [System.Windows.Input.Mouse]::Synchronize()
+  }
+  return $rtb
+}
+
 function Get-UpdateChannel {
   # Detects how the script was launched so the update action can match the channel.
   # Cached once in $Script:UpdateChannel; ordering matters because RightClick and LooseFile
@@ -1300,13 +1331,14 @@ Add-Type -AssemblyName System.Windows.Forms
         </Trigger>
       </Style.Triggers>
     </Style>
-    <Style TargetType="Separator">
+    <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}"
+        TargetType="Separator">
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Separator">
             <Border Height="1"
                 Background="{StaticResource Border}"
-                Margin="8,4"/>
+                Margin="0,4"/>
           </ControlTemplate>
         </Setter.Value>
       </Setter>
@@ -1370,12 +1402,6 @@ Add-Type -AssemblyName System.Windows.Forms
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver"
-                  Value="True">
-                <Setter TargetName="Bd"
-                    Property="BorderBrush"
-                    Value="{StaticResource BorderMuted}"/>
-              </Trigger>
-              <Trigger Property="IsKeyboardFocused"
                   Value="True">
                 <Setter TargetName="Bd"
                     Property="BorderBrush"
@@ -1561,12 +1587,6 @@ Add-Type -AssemblyName System.Windows.Forms
                     Property="Background"
                     Value="{StaticResource Surface2}"/>
               </Trigger>
-              <Trigger Property="IsSelected"
-                  Value="True">
-                <Setter TargetName="Bd"
-                    Property="Background"
-                    Value="{StaticResource Surface2}"/>
-              </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
@@ -1716,6 +1736,11 @@ Add-Type -AssemblyName System.Windows.Forms
             <MenuItem Header="File">
               <MenuItem Name="MenuItem_Open"
                   Header="Open Icon Temp Folder"/>
+              <Separator/>
+              <MenuItem Name="MenuItem_ScreenshotCopy"
+                  Header="Copy Screenshot to Clipboard"/>
+              <MenuItem Name="MenuItem_ScreenshotSave"
+                  Header="Save Screenshot..."/>
             </MenuItem>
             <MenuItem Header="Right Click Menu">
               <MenuItem Name="MenuItem_Install"
@@ -1732,6 +1757,7 @@ Add-Type -AssemblyName System.Windows.Forms
                   Header="michaeltheadmin.com"/>
               <MenuItem Name="MenuItem_CheckForUpdates"
                   Header="Check for Updates"/>
+              <Separator/>
               <MenuItem Name="MenuItem_Version"
                   Header="Version 1.0.0"
                   IsEnabled="False"
@@ -1755,7 +1781,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Foreground="{StaticResource TextMuted}"
             FontSize="12"
             Margin="12,0"
-            Text="Created By Michael Escamilla"/>
+            Text="Created By Michael Escamilla | michaeltheadmin.com"/>
       </Border>
 
       <Grid>
@@ -1985,80 +2011,11 @@ Add-Type -AssemblyName System.Windows.Forms
             <ColumnDefinition Width="60"/>
           </Grid.ColumnDefinitions>
           <Grid.Resources>
+            <!-- Denser labels than the themed base style; buttons are disabled at load by Disable-AllButtons. -->
             <Style TargetType="Label"
                 BasedOn="{StaticResource ThemedLabel}">
-              <Setter Property="Margin"
-                      Value="2.5"/>
               <Setter Property="FontSize"
                       Value="12"/>
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="HorizontalContentAlignment"
-                      Value="Right"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="IsEnabled"
-                      Value="True"/>
-            </Style>
-            <Style TargetType="TextBox"
-                BasedOn="{StaticResource ThemedTextBox}">
-              <Setter Property="Margin"
-                      Value="2.5"/>
-              <Setter Property="Width"
-                      Value="Auto"/>
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="IsEnabled"
-                      Value="True"/>
-              <Setter Property="IsReadOnly"
-                      Value="True"/>
-            </Style>
-            <Style TargetType="Button"
-                BasedOn="{StaticResource ThemedButton}">
-              <Setter Property="Margin"
-                      Value="2.5"/>
-              <Setter Property="Width"
-                      Value="Auto"/>
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="IsEnabled"
-                      Value="False"/>
-            </Style>
-            <Style TargetType="ListBox"
-                BasedOn="{StaticResource ThemedListBox}">
-              <Setter Property="Margin"
-                      Value="2.5"/>
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="HorizontalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-            </Style>
-            <Style TargetType="ListBoxItem"
-                BasedOn="{StaticResource ThemedListBoxItem}">
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="HorizontalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="Height"
-                      Value="{Binding ElementName=lsbox_FilePath, Path=ActualHeight}"/>
             </Style>
           </Grid.Resources>
 
@@ -2083,8 +2040,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="1"
             Grid.Column="2"
             Name="btn_ProductName_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
           <!-- Row -->
@@ -2102,8 +2058,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="2"
             Grid.Column="2"
             Name="btn_Manufacture_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2121,8 +2076,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="3"
             Grid.Column="2"
             Name="btn_ProductVersion_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2140,8 +2094,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="4"
             Grid.Column="2"
             Name="btn_ProductCode_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2159,8 +2112,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="5"
             Grid.Column="2"
             Name="btn_CompressedGUID_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2178,8 +2130,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="6"
             Grid.Column="2"
             Name="btn_UpgradeCode_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2187,14 +2138,12 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="7"
             Grid.Column="0"
             Name="btn_AllProperties"
-            Content="All Properties"
-            IsEnabled="False"/>
+            Content="All Properties"/>
         <ListBox
             Grid.Row="7"
             Grid.Column="1"
             Name="lsbox_FilePath"
             AllowDrop="True"
-            IsEnabled="True"
             TabIndex="0">
           <ListBox.Items>
             <ListBoxItem>
@@ -2218,8 +2167,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="7"
             Grid.Column="2"
             Name="btn_FilePath_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
       </Grid>
       </Grid>
@@ -2275,6 +2223,7 @@ $formMSIProperties.Add_Loaded({
 
       # Make the warning message bold and yellow
       $lsbox_FilePath.Background = [System.Windows.Media.Brushes]::Yellow
+      $lsbox_FilePath.Foreground = [System.Windows.Media.Brushes]::Black
       $lsbox_FilePath.FontWeight = 'Bold'
     }
 
@@ -2380,6 +2329,41 @@ $MenuItem_Open.add_Click({
       New-Item -ItemType Directory -Path $Script:IconTempFolderPath -ErrorAction SilentlyContinue
     }
     Invoke-Item -Path $Script:IconTempFolderPath
+  })
+
+$MenuItem_ScreenshotCopy.add_Click({
+    try {
+      $bitmap = Get-WindowBitmap
+      [System.Windows.Clipboard]::SetImage($bitmap)
+      Set-StatusMessage -Message "Screenshot copied to clipboard." -Type Success
+    }
+    catch {
+      Write-Warning "Failed to copy screenshot: $_"
+      Set-StatusMessage -Message "Failed to copy screenshot." -Type Danger
+    }
+  })
+
+$MenuItem_ScreenshotSave.add_Click({
+    try {
+      $dialog = New-Object System.Windows.Forms.SaveFileDialog
+      $dialog.Filter = "PNG Image (*.png)|*.png"
+      $dialog.Title = "Save Screenshot"
+      $dialog.FileName = "MSIProperties_$(Get-Date -Format 'yyyyMMdd_HHmmss').png"
+      if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
+
+      $bitmap = Get-WindowBitmap
+      $encoder = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
+      $encoder.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($bitmap))
+      $stream = [System.IO.File]::Create($dialog.FileName)
+      try { $encoder.Save($stream) } finally { $stream.Dispose() }
+
+      Write-Host "Screenshot saved: [$($dialog.FileName)]"
+      Set-StatusMessage -Message "Screenshot saved." -Type Success
+    }
+    catch {
+      Write-Warning "Failed to save screenshot: $_"
+      Set-StatusMessage -Message "Failed to save screenshot." -Type Danger
+    }
   })
 
 $MenuItem_Install.add_Click({
