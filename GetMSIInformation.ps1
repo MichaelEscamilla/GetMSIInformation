@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.8.13.0
+.VERSION 2026.8.14.0
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -47,6 +47,9 @@
 2026.8.13.0   - Added screenshot options under the File menu to copy the window to the clipboard or save it as a PNG.
                 Fixed the drag-and-drop box staying highlighted gray after being clicked.
                 Property fields now show the accent outline on hover instead of staying outlined after clicking.
+2026.8.14.0   - The right-click menu now works on any file type to get hash information, not just MSI files.
+                Fixed repeating errors when the status bar message tried to reset.
+                The window now comes to the foreground faster on the first launch in a session.
 
 .PRIVATEDATA
 
@@ -79,7 +82,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.8.13.0"
+[System.Version]$Script:ScriptVersion = "2026.8.14.0"
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 # Icon Temp Folder Path
