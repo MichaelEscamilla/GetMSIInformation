@@ -821,15 +821,27 @@ function Set-StatusMessage {
   # Reuse a single timer so rapid clicks don't stack revert callbacks.
   if (-not $Script:StatusTimer) {
     $Script:StatusTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $Script:StatusTimer.Interval = [TimeSpan]::FromSeconds(4)
+    # Stop via $sender and read the restore state off the timer's Tag: script-scoped
+    # variables aren't reliably visible inside the Tick callback, so keep it self-contained.
     $Script:StatusTimer.Add_Tick({
-        $Script:StatusTimer.Stop()
-        $txtblk_StatusBar.Text = $Script:StatusRestoreText
-        $txtblk_StatusBar.Foreground = $Script:StatusRestoreBrush
-        $txtblk_StatusBar.FontWeight = $Script:StatusRestoreWeight
+        param($timer, $e)
+        $timer.Stop()
+        $restore = $timer.Tag
+        if ($restore) {
+          $restore.Bar.Text = $restore.Text
+          $restore.Bar.Foreground = $restore.Brush
+          $restore.Bar.FontWeight = $restore.Weight
+        }
       })
   }
   $Script:StatusTimer.Stop()
-  $Script:StatusTimer.Interval = [TimeSpan]::FromSeconds(4)
+  $Script:StatusTimer.Tag = [pscustomobject]@{
+    Bar    = $txtblk_StatusBar
+    Text   = $Script:StatusRestoreText
+    Brush  = $Script:StatusRestoreBrush
+    Weight = $Script:StatusRestoreWeight
+  }
   $Script:StatusTimer.Start()
 }
 
@@ -1017,44 +1029,10 @@ function Install-RightClickMenu {
       }
     }
 
-    # Reg2CI (c) 2020 by Roger Zander
-    # https://github.com/asjimene/GetMSIInfo/blob/master/GetMSIInfo.ps1
-
-    # Check if the registry path for .msi file associations exists, if not, create it.
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi") -ne $true) {
-      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi" -Force -ErrorAction SilentlyContinue 
+    # Remove the legacy .msi-only entry so upgraders don't keep a stale duplicate on MSI files.
+    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName") -eq $true) {
+      Remove-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Force -Recurse -ErrorAction SilentlyContinue
     }
-
-    # Check if the 'shell' subkey exists under the .msi file associations, if not, create it.
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell") -ne $true) {
-      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell" -Force -ErrorAction SilentlyContinue 
-    }
-
-    # Check if the 'Get MSI Information' subkey exists under 'shell', if not, create it.
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName") -ne $true) {
-      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Force -ErrorAction SilentlyContinue 
-    }
-
-    # Set the 'icon' value under 'Get MSI Information'
-    try {
-      New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $IconFilePath -PropertyType String -Force -ErrorAction SilentlyContinue
-    }
-    catch {
-      if ($Script:PowerShellPath) {
-        New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $Script:PowerShellPath.Path -PropertyType String -Force -ErrorAction SilentlyContinue
-      }
-      else {
-        New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
-      }
-    }
-   
-    # Check if the 'command' subkey exists under 'Get MSI Information', if not, create it.
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command") -ne $true) {
-      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Force -ErrorAction SilentlyContinue 
-    }
-
-    # Set the default value of the 'Get MSI Information' key to "Get MSI Information".
-    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name '(default)' -Value "$RightClickMenuName" -PropertyType String -Force -ea SilentlyContinue;
 
     # Prefer pwsh 7.4+ so the menu launches directly and skips the slow relaunch.
     # Fall back to Windows PowerShell (always present) when pwsh isn't installed.
@@ -1065,9 +1043,29 @@ function Install-RightClickMenu {
       $CommandExe = "C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe"
     }
 
-    # Set the default value of the 'command' key to execute a PowerShell script with the .msi file as an argument.
-    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Name '(default)' -Value "`"$CommandExe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -Command `"$($DestinationFolder.FullName)\$($SaveAsScriptName)`" -FilePath '%1'" -PropertyType String -Force -ErrorAction SilentlyContinue;
-    Write-Host "Registry Modified:  [HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$($RightClickMenuName)]"
+    # Pick the icon: prefer the extracted .ico, then pwsh, then Windows PowerShell.
+    if (Test-Path -LiteralPath $IconFilePath) {
+      $IconValue = $IconFilePath
+    }
+    elseif ($Script:PowerShellPath) {
+      $IconValue = $Script:PowerShellPath.Path
+    }
+    else {
+      $IconValue = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+    }
+
+    # Register under the '*' key so the entry appears on the right-click menu of every file type.
+    # '*' is a literal registry key but a wildcard to the PowerShell registry provider, so use the
+    # .NET registry API to create/set it reliably.
+    # TODO: Revisit the menu label - "Get MSI Information" now shows on all file types, not just .msi.
+    $MenuKey = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Software\Classes\*\shell\$RightClickMenuName")
+    $MenuKey.SetValue('', $RightClickMenuName)
+    $MenuKey.SetValue('icon', $IconValue)
+    $CommandKey = $MenuKey.CreateSubKey('command')
+    $CommandKey.SetValue('', "`"$CommandExe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -Command `"$($DestinationFolder.FullName)\$($SaveAsScriptName)`" -FilePath '%1'")
+    $CommandKey.Close()
+    $MenuKey.Close()
+    Write-Host "Registry Modified:  [HKCU:\Software\Classes\*\shell\$($RightClickMenuName)]"
     Write-Host "Installation Complete"
 }
 #endregion Functions
@@ -2232,8 +2230,10 @@ $formMSIProperties.Add_Loaded({
     $MenuItem_Version.Header = "Version $($ScriptVersion)"
     $txtblk_TitleVersion.Text = " $($ScriptVersion)"
 
-    # Background update check (non-blocking).
-    Start-BackgroundUpdateCheck
+    # Defer the update check until the window has rendered and come to the foreground.
+    $formMSIProperties.Dispatcher.InvokeAsync({
+        Start-BackgroundUpdateCheck
+      }, [System.Windows.Threading.DispatcherPriority]::ApplicationIdle) | Out-Null
 
     # Check if the FilePath parameter is provided to script
     if ($FilePath) {
@@ -2379,11 +2379,15 @@ $MenuItem_Uninstall.add_Click({
     Remove-item "$env:LOCALAPPDATA\GetMSIInformation" -Force -Recurse -ErrorAction SilentlyContinue
     Write-Host "Deleted Folder:   [$env:LOCALAPPDATA\GetMSIInformation]"
 
-    # Remove the 'Get MSI Information' registry key if it exists
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName") -eq $true) { 
-      Remove-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -force -Recurse -ea SilentlyContinue 
+    # Remove the all-files '*' entry. '*' is a wildcard to the PowerShell registry provider,
+    # so use the .NET registry API to delete the key tree reliably.
+    [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree("Software\Classes\*\shell\$RightClickMenuName", $false)
+    Write-Host "Deleted Registry: [HKCU:\Software\Classes\*\shell\$($RightClickMenuName)]"
+
+    # Clean up the legacy .msi-only entry if an older version left one behind.
+    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName") -eq $true) {
+      Remove-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Force -Recurse -ErrorAction SilentlyContinue
     }
-    Write-Host "Deleted Registry: [HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$($RightClickMenuName)]"
     Write-Host "Uninstallation Complete"
     Set-StatusMessage -Message "Right-click menu removed." -Type Danger
   })
