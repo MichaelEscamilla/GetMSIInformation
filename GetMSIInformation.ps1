@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.8.12.2
+.VERSION 2026.8.14.0
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -44,6 +44,12 @@
 2026.8.12.1   - Added Logic to Update the script depending on the way it was launched.
 2026.8.12.2   - Added status bar feedback when installing or removing the right-click menu.
                 The 'latest version' confirmation now shows in the status bar instead of a pop-up.
+2026.8.13.0   - Added screenshot options under the File menu to copy the window to the clipboard or save it as a PNG.
+                Fixed the drag-and-drop box staying highlighted gray after being clicked.
+                Property fields now show the accent outline on hover instead of staying outlined after clicking.
+2026.8.14.0   - The right-click menu now works on any file type to get hash information, not just MSI files.
+                Fixed repeating errors when the status bar message tried to reset.
+                The window now comes to the foreground faster on the first launch in a session.
 
 .PRIVATEDATA
 
@@ -76,7 +82,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.8.12.2"
+[System.Version]$Script:ScriptVersion = "2026.8.14.0"
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 # Icon Temp Folder Path
@@ -818,16 +824,56 @@ function Set-StatusMessage {
   # Reuse a single timer so rapid clicks don't stack revert callbacks.
   if (-not $Script:StatusTimer) {
     $Script:StatusTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $Script:StatusTimer.Interval = [TimeSpan]::FromSeconds(4)
+    # Stop via $sender and read the restore state off the timer's Tag: script-scoped
+    # variables aren't reliably visible inside the Tick callback, so keep it self-contained.
     $Script:StatusTimer.Add_Tick({
-        $Script:StatusTimer.Stop()
-        $txtblk_StatusBar.Text = $Script:StatusRestoreText
-        $txtblk_StatusBar.Foreground = $Script:StatusRestoreBrush
-        $txtblk_StatusBar.FontWeight = $Script:StatusRestoreWeight
+        param($timer, $e)
+        $timer.Stop()
+        $restore = $timer.Tag
+        if ($restore) {
+          $restore.Bar.Text = $restore.Text
+          $restore.Bar.Foreground = $restore.Brush
+          $restore.Bar.FontWeight = $restore.Weight
+        }
       })
   }
   $Script:StatusTimer.Stop()
-  $Script:StatusTimer.Interval = [TimeSpan]::FromSeconds(4)
+  $Script:StatusTimer.Tag = [pscustomobject]@{
+    Bar    = $txtblk_StatusBar
+    Text   = $Script:StatusRestoreText
+    Brush  = $Script:StatusRestoreBrush
+    Weight = $Script:StatusRestoreWeight
+  }
   $Script:StatusTimer.Start()
+}
+
+function Get-WindowBitmap {
+  # Renders the window's visual tree to a bitmap at the current DPI so the capture is crisp on scaled displays.
+  [CmdletBinding()]
+  param()
+
+  $source = [System.Windows.PresentationSource]::FromVisual($formMSIProperties)
+  $scaleX = if ($source) { $source.CompositionTarget.TransformToDevice.M11 } else { 1 }
+  $scaleY = if ($source) { $source.CompositionTarget.TransformToDevice.M22 } else { 1 }
+
+  $pixelWidth = [int][Math]::Ceiling($formMSIProperties.ActualWidth * $scaleX)
+  $pixelHeight = [int][Math]::Ceiling($formMSIProperties.ActualHeight * $scaleY)
+
+  # Suppress hit-testing during the render so a control under the cursor (e.g. a textbox left
+  # hovered after the menu closes) doesn't capture its IsMouseOver accent state.
+  $formMSIProperties.IsHitTestVisible = $false
+  [System.Windows.Input.Mouse]::Synchronize()
+  $formMSIProperties.UpdateLayout()
+  try {
+    $rtb = New-Object System.Windows.Media.Imaging.RenderTargetBitmap($pixelWidth, $pixelHeight, (96 * $scaleX), (96 * $scaleY), [System.Windows.Media.PixelFormats]::Pbgra32)
+    $rtb.Render($formMSIProperties)
+  }
+  finally {
+    $formMSIProperties.IsHitTestVisible = $true
+    [System.Windows.Input.Mouse]::Synchronize()
+  }
+  return $rtb
 }
 
 function Get-UpdateChannel {
@@ -986,44 +1032,10 @@ function Install-RightClickMenu {
       }
     }
 
-    # Reg2CI (c) 2020 by Roger Zander
-    # https://github.com/asjimene/GetMSIInfo/blob/master/GetMSIInfo.ps1
-
-    # Check if the registry path for .msi file associations exists, if not, create it.
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi") -ne $true) {
-      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi" -Force -ErrorAction SilentlyContinue 
+    # Remove the legacy .msi-only entry so upgraders don't keep a stale duplicate on MSI files.
+    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName") -eq $true) {
+      Remove-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Force -Recurse -ErrorAction SilentlyContinue
     }
-
-    # Check if the 'shell' subkey exists under the .msi file associations, if not, create it.
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell") -ne $true) {
-      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell" -Force -ErrorAction SilentlyContinue 
-    }
-
-    # Check if the 'Get MSI Information' subkey exists under 'shell', if not, create it.
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName") -ne $true) {
-      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Force -ErrorAction SilentlyContinue 
-    }
-
-    # Set the 'icon' value under 'Get MSI Information'
-    try {
-      New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $IconFilePath -PropertyType String -Force -ErrorAction SilentlyContinue
-    }
-    catch {
-      if ($Script:PowerShellPath) {
-        New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value $Script:PowerShellPath.Path -PropertyType String -Force -ErrorAction SilentlyContinue
-      }
-      else {
-        New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name 'icon' -Value "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force -ErrorAction SilentlyContinue
-      }
-    }
-   
-    # Check if the 'command' subkey exists under 'Get MSI Information', if not, create it.
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command") -ne $true) {
-      New-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Force -ErrorAction SilentlyContinue 
-    }
-
-    # Set the default value of the 'Get MSI Information' key to "Get MSI Information".
-    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Name '(default)' -Value "$RightClickMenuName" -PropertyType String -Force -ea SilentlyContinue;
 
     # Prefer pwsh 7.4+ so the menu launches directly and skips the slow relaunch.
     # Fall back to Windows PowerShell (always present) when pwsh isn't installed.
@@ -1034,9 +1046,29 @@ function Install-RightClickMenu {
       $CommandExe = "C:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe"
     }
 
-    # Set the default value of the 'command' key to execute a PowerShell script with the .msi file as an argument.
-    New-ItemProperty -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName\command" -Name '(default)' -Value "`"$CommandExe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -Command `"$($DestinationFolder.FullName)\$($SaveAsScriptName)`" -FilePath '%1'" -PropertyType String -Force -ErrorAction SilentlyContinue;
-    Write-Host "Registry Modified:  [HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$($RightClickMenuName)]"
+    # Pick the icon: prefer the extracted .ico, then pwsh, then Windows PowerShell.
+    if (Test-Path -LiteralPath $IconFilePath) {
+      $IconValue = $IconFilePath
+    }
+    elseif ($Script:PowerShellPath) {
+      $IconValue = $Script:PowerShellPath.Path
+    }
+    else {
+      $IconValue = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+    }
+
+    # Register under the '*' key so the entry appears on the right-click menu of every file type.
+    # '*' is a literal registry key but a wildcard to the PowerShell registry provider, so use the
+    # .NET registry API to create/set it reliably.
+    # TODO: Revisit the menu label - "Get MSI Information" now shows on all file types, not just .msi.
+    $MenuKey = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Software\Classes\*\shell\$RightClickMenuName")
+    $MenuKey.SetValue('', $RightClickMenuName)
+    $MenuKey.SetValue('icon', $IconValue)
+    $CommandKey = $MenuKey.CreateSubKey('command')
+    $CommandKey.SetValue('', "`"$CommandExe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -Command `"$($DestinationFolder.FullName)\$($SaveAsScriptName)`" -FilePath '%1'")
+    $CommandKey.Close()
+    $MenuKey.Close()
+    Write-Host "Registry Modified:  [HKCU:\Software\Classes\*\shell\$($RightClickMenuName)]"
     Write-Host "Installation Complete"
 }
 #endregion Functions
@@ -1300,13 +1332,14 @@ Add-Type -AssemblyName System.Windows.Forms
         </Trigger>
       </Style.Triggers>
     </Style>
-    <Style TargetType="Separator">
+    <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}"
+        TargetType="Separator">
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Separator">
             <Border Height="1"
                 Background="{StaticResource Border}"
-                Margin="8,4"/>
+                Margin="0,4"/>
           </ControlTemplate>
         </Setter.Value>
       </Setter>
@@ -1370,12 +1403,6 @@ Add-Type -AssemblyName System.Windows.Forms
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver"
-                  Value="True">
-                <Setter TargetName="Bd"
-                    Property="BorderBrush"
-                    Value="{StaticResource BorderMuted}"/>
-              </Trigger>
-              <Trigger Property="IsKeyboardFocused"
                   Value="True">
                 <Setter TargetName="Bd"
                     Property="BorderBrush"
@@ -1561,12 +1588,6 @@ Add-Type -AssemblyName System.Windows.Forms
                     Property="Background"
                     Value="{StaticResource Surface2}"/>
               </Trigger>
-              <Trigger Property="IsSelected"
-                  Value="True">
-                <Setter TargetName="Bd"
-                    Property="Background"
-                    Value="{StaticResource Surface2}"/>
-              </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
@@ -1716,6 +1737,11 @@ Add-Type -AssemblyName System.Windows.Forms
             <MenuItem Header="File">
               <MenuItem Name="MenuItem_Open"
                   Header="Open Icon Temp Folder"/>
+              <Separator/>
+              <MenuItem Name="MenuItem_ScreenshotCopy"
+                  Header="Copy Screenshot to Clipboard"/>
+              <MenuItem Name="MenuItem_ScreenshotSave"
+                  Header="Save Screenshot..."/>
             </MenuItem>
             <MenuItem Header="Right Click Menu">
               <MenuItem Name="MenuItem_Install"
@@ -1732,6 +1758,7 @@ Add-Type -AssemblyName System.Windows.Forms
                   Header="michaeltheadmin.com"/>
               <MenuItem Name="MenuItem_CheckForUpdates"
                   Header="Check for Updates"/>
+              <Separator/>
               <MenuItem Name="MenuItem_Version"
                   Header="Version 1.0.0"
                   IsEnabled="False"
@@ -1755,7 +1782,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Foreground="{StaticResource TextMuted}"
             FontSize="12"
             Margin="12,0"
-            Text="Created By Michael Escamilla"/>
+            Text="Created By Michael Escamilla | michaeltheadmin.com"/>
       </Border>
 
       <Grid>
@@ -1985,80 +2012,11 @@ Add-Type -AssemblyName System.Windows.Forms
             <ColumnDefinition Width="60"/>
           </Grid.ColumnDefinitions>
           <Grid.Resources>
+            <!-- Denser labels than the themed base style; buttons are disabled at load by Disable-AllButtons. -->
             <Style TargetType="Label"
                 BasedOn="{StaticResource ThemedLabel}">
-              <Setter Property="Margin"
-                      Value="2.5"/>
               <Setter Property="FontSize"
                       Value="12"/>
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="HorizontalContentAlignment"
-                      Value="Right"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="IsEnabled"
-                      Value="True"/>
-            </Style>
-            <Style TargetType="TextBox"
-                BasedOn="{StaticResource ThemedTextBox}">
-              <Setter Property="Margin"
-                      Value="2.5"/>
-              <Setter Property="Width"
-                      Value="Auto"/>
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="IsEnabled"
-                      Value="True"/>
-              <Setter Property="IsReadOnly"
-                      Value="True"/>
-            </Style>
-            <Style TargetType="Button"
-                BasedOn="{StaticResource ThemedButton}">
-              <Setter Property="Margin"
-                      Value="2.5"/>
-              <Setter Property="Width"
-                      Value="Auto"/>
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="IsEnabled"
-                      Value="False"/>
-            </Style>
-            <Style TargetType="ListBox"
-                BasedOn="{StaticResource ThemedListBox}">
-              <Setter Property="Margin"
-                      Value="2.5"/>
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="HorizontalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-            </Style>
-            <Style TargetType="ListBoxItem"
-                BasedOn="{StaticResource ThemedListBoxItem}">
-              <Setter Property="HorizontalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="HorizontalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="VerticalAlignment"
-                      Value="Stretch"/>
-              <Setter Property="VerticalContentAlignment"
-                      Value="Center"/>
-              <Setter Property="Height"
-                      Value="{Binding ElementName=lsbox_FilePath, Path=ActualHeight}"/>
             </Style>
           </Grid.Resources>
 
@@ -2083,8 +2041,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="1"
             Grid.Column="2"
             Name="btn_ProductName_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
           <!-- Row -->
@@ -2102,8 +2059,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="2"
             Grid.Column="2"
             Name="btn_Manufacture_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2121,8 +2077,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="3"
             Grid.Column="2"
             Name="btn_ProductVersion_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2140,8 +2095,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="4"
             Grid.Column="2"
             Name="btn_ProductCode_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2159,8 +2113,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="5"
             Grid.Column="2"
             Name="btn_CompressedGUID_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2178,8 +2131,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="6"
             Grid.Column="2"
             Name="btn_UpgradeCode_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
         <!-- Row -->
@@ -2187,14 +2139,12 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="7"
             Grid.Column="0"
             Name="btn_AllProperties"
-            Content="All Properties"
-            IsEnabled="False"/>
+            Content="All Properties"/>
         <ListBox
             Grid.Row="7"
             Grid.Column="1"
             Name="lsbox_FilePath"
             AllowDrop="True"
-            IsEnabled="True"
             TabIndex="0">
           <ListBox.Items>
             <ListBoxItem>
@@ -2218,8 +2168,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Grid.Row="7"
             Grid.Column="2"
             Name="btn_FilePath_Copy"
-            FontFamily="Segoe MDL2 Assets"
-            FontSize="14"
+            Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
       </Grid>
       </Grid>
@@ -2275,6 +2224,7 @@ $formMSIProperties.Add_Loaded({
 
       # Make the warning message bold and yellow
       $lsbox_FilePath.Background = [System.Windows.Media.Brushes]::Yellow
+      $lsbox_FilePath.Foreground = [System.Windows.Media.Brushes]::Black
       $lsbox_FilePath.FontWeight = 'Bold'
     }
 
@@ -2283,8 +2233,10 @@ $formMSIProperties.Add_Loaded({
     $MenuItem_Version.Header = "Version $($ScriptVersion)"
     $txtblk_TitleVersion.Text = " $($ScriptVersion)"
 
-    # Background update check (non-blocking).
-    Start-BackgroundUpdateCheck
+    # Defer the update check until the window has rendered and come to the foreground.
+    $formMSIProperties.Dispatcher.InvokeAsync({
+        Start-BackgroundUpdateCheck
+      }, [System.Windows.Threading.DispatcherPriority]::ApplicationIdle) | Out-Null
 
     # Check if the FilePath parameter is provided to script
     if ($FilePath) {
@@ -2382,6 +2334,41 @@ $MenuItem_Open.add_Click({
     Invoke-Item -Path $Script:IconTempFolderPath
   })
 
+$MenuItem_ScreenshotCopy.add_Click({
+    try {
+      $bitmap = Get-WindowBitmap
+      [System.Windows.Clipboard]::SetImage($bitmap)
+      Set-StatusMessage -Message "Screenshot copied to clipboard." -Type Success
+    }
+    catch {
+      Write-Warning "Failed to copy screenshot: $_"
+      Set-StatusMessage -Message "Failed to copy screenshot." -Type Danger
+    }
+  })
+
+$MenuItem_ScreenshotSave.add_Click({
+    try {
+      $dialog = New-Object System.Windows.Forms.SaveFileDialog
+      $dialog.Filter = "PNG Image (*.png)|*.png"
+      $dialog.Title = "Save Screenshot"
+      $dialog.FileName = "MSIProperties_$(Get-Date -Format 'yyyyMMdd_HHmmss').png"
+      if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
+
+      $bitmap = Get-WindowBitmap
+      $encoder = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
+      $encoder.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($bitmap))
+      $stream = [System.IO.File]::Create($dialog.FileName)
+      try { $encoder.Save($stream) } finally { $stream.Dispose() }
+
+      Write-Host "Screenshot saved: [$($dialog.FileName)]"
+      Set-StatusMessage -Message "Screenshot saved." -Type Success
+    }
+    catch {
+      Write-Warning "Failed to save screenshot: $_"
+      Set-StatusMessage -Message "Failed to save screenshot." -Type Danger
+    }
+  })
+
 $MenuItem_Install.add_Click({
     Write-Host "Menu Item Install Clicked"
     Install-RightClickMenu
@@ -2395,11 +2382,15 @@ $MenuItem_Uninstall.add_Click({
     Remove-item "$env:LOCALAPPDATA\GetMSIInformation" -Force -Recurse -ErrorAction SilentlyContinue
     Write-Host "Deleted Folder:   [$env:LOCALAPPDATA\GetMSIInformation]"
 
-    # Remove the 'Get MSI Information' registry key if it exists
-    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName") -eq $true) { 
-      Remove-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -force -Recurse -ea SilentlyContinue 
+    # Remove the all-files '*' entry. '*' is a wildcard to the PowerShell registry provider,
+    # so use the .NET registry API to delete the key tree reliably.
+    [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree("Software\Classes\*\shell\$RightClickMenuName", $false)
+    Write-Host "Deleted Registry: [HKCU:\Software\Classes\*\shell\$($RightClickMenuName)]"
+
+    # Clean up the legacy .msi-only entry if an older version left one behind.
+    if ((Test-Path -LiteralPath "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName") -eq $true) {
+      Remove-Item "HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$RightClickMenuName" -Force -Recurse -ErrorAction SilentlyContinue
     }
-    Write-Host "Deleted Registry: [HKCU:\Software\Classes\SystemFileAssociations\.msi\shell\$($RightClickMenuName)]"
     Write-Host "Uninstallation Complete"
     Set-StatusMessage -Message "Right-click menu removed." -Type Danger
   })
