@@ -14,6 +14,17 @@ iex (irm msiapp.michaeltheadmin.com)
 ```
  ![Invoke MSI Application](/Images/Application_Example_Run.png)
 
+## Check for Updates
+When the app launches, it quietly checks for a newer version in the background, so it never slows down or freezes while you use it.
+
+If an update is found, you'll see an **Update Available** item appear in the menu.<br>
+![Update Available](/Images/Application_Update_Available.png)
+
+You can also check for updates anytime from the **About** menu.<br>
+![Manual Update Check](/Images/Application_Update_Check_Manual.png)
+
+Updates are based on the [Releases](https://github.com/MichaelEscamilla/GetMSIInformation/releases) published on GitHub.
+
 ## Icon Extraction
 If the MSI contains an icon, it will be extracted and displayed<br>
 ![Icon Display](/Images/Application_IconDisplay_Single.png)
