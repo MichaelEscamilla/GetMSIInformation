@@ -183,10 +183,10 @@ function Get-MsiProperties {
 
 # Stolen from: https://github.com/codaamok
 # https://gist.github.com/codaamok/7ed30d01280ce28bb451621966707c1b
-function Convert-ProductCodeToCompressedGuid {
+function Convert-GuidToCompressedGuid {
   param(
     [Parameter(Mandatory = $true)]
-    [string]$ProductCode
+    [string]$Guid
   )
 
   function Get-ReversedString ([array]$a) {
@@ -198,13 +198,13 @@ function Convert-ProductCodeToCompressedGuid {
   }
 
   # Strip braces and dashes from the GUID
-  $ProductCode = $ProductCode -replace '\{|\}|\-'
+  $Guid = $Guid -replace '\{|\}|\-'
 
-  $data1 = Get-ReversedString $ProductCode[0..7]
-  $data2 = Get-ReversedString $ProductCode[8..11]
-  $data3 = Get-ReversedString $ProductCode[12..15]
-  $data4 = Get-ReversedBytes ($ProductCode[16..19] -join '')
-  $data5 = Get-ReversedBytes ($ProductCode[20..31] -join '')
+  $data1 = Get-ReversedString $Guid[0..7]
+  $data2 = Get-ReversedString $Guid[8..11]
+  $data3 = Get-ReversedString $Guid[12..15]
+  $data4 = Get-ReversedBytes ($Guid[16..19] -join '')
+  $data5 = Get-ReversedBytes ($Guid[20..31] -join '')
 
   return '{0}{1}{2}{3}{4}' -f $data1, $data2, $data3, $data4, $data5
 }
@@ -406,9 +406,12 @@ function Set-TextboxInformation {
     $txt_ProductCode.Text = $MSIPropertiesInfo.ProductCode
     $txt_UpgradeCode.Text = $MSIPropertiesInfo.UpgradeCode
 
-    # Set the Compressed GUID from the Product Code
+    # Set the compressed GUIDs from the Product and Upgrade Codes
     if ($MSIPropertiesInfo.ProductCode) {
-      $txt_CompressedGUID.Text = Convert-ProductCodeToCompressedGuid -ProductCode $MSIPropertiesInfo.ProductCode
+      $txt_CompressedGUID.Text = Convert-GuidToCompressedGuid -Guid $MSIPropertiesInfo.ProductCode
+    }
+    if ($MSIPropertiesInfo.UpgradeCode) {
+      $txt_CompressedUpgradeGUID.Text = Convert-GuidToCompressedGuid -Guid $MSIPropertiesInfo.UpgradeCode
     }
   }
 
@@ -1090,7 +1093,7 @@ Add-Type -AssemblyName System.Windows.Forms
   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   Name="form1"
-  Width="920"
+  Width="960"
   Height="620"
   ResizeMode="NoResize"
   WindowStyle="None"
@@ -2003,7 +2006,6 @@ Add-Type -AssemblyName System.Windows.Forms
             <RowDefinition Height="36"/>
             <RowDefinition Height="36"/>
             <RowDefinition Height="36"/>
-            <RowDefinition Height="36"/>
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
           <Grid.ColumnDefinitions>
@@ -2080,68 +2082,98 @@ Add-Type -AssemblyName System.Windows.Forms
             Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
-        <!-- Row -->
-        <Label
-            Grid.Row="4"
+        <!-- Product Code and its compressed GUID share a row -->
+        <Grid
+          Grid.Row="4"
+          Grid.Column="0"
+          Grid.ColumnSpan="3">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="110"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="60"/>
+            <ColumnDefinition Width="80"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="60"/>
+          </Grid.ColumnDefinitions>
+          <Label
             Grid.Column="0"
             Name="lbl_ProductCode"
             Content="Product Code"/>
-        <TextBox
-            Grid.Row="4"
+          <TextBox
             Grid.Column="1"
             Name="txt_ProductCode"
             xml:space="preserve"/>
-        <Button
-            Grid.Row="4"
+          <Button
             Grid.Column="2"
             Name="btn_ProductCode_Copy"
             Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
-
-        <!-- Row -->
-        <Label
-            Grid.Row="5"
-            Grid.Column="0"
+          <Label
+            Grid.Column="3"
             Name="lbl_CompressedGUID"
-            Content="Comp Prod Code"/>
-        <TextBox
-            Grid.Row="5"
-            Grid.Column="1"
+            HorizontalContentAlignment="Left"
+            Content="Compressed"/>
+          <TextBox
+            Grid.Column="4"
             Name="txt_CompressedGUID"
             xml:space="preserve"/>
-        <Button
-            Grid.Row="5"
-            Grid.Column="2"
+          <Button
+            Grid.Column="5"
             Name="btn_CompressedGUID_Copy"
             Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
+        </Grid>
 
-        <!-- Row -->
-        <Label
-            Grid.Row="6"
+        <!-- Upgrade Code and its compressed GUID share a row -->
+        <Grid
+          Grid.Row="5"
+          Grid.Column="0"
+          Grid.ColumnSpan="3">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="110"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="60"/>
+            <ColumnDefinition Width="80"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="60"/>
+          </Grid.ColumnDefinitions>
+          <Label
             Grid.Column="0"
             Name="lbl_UpgradeCode"
             Content="Upgrade Code"/>
-        <TextBox
-            Grid.Row="6"
+          <TextBox
             Grid.Column="1"
             Name="txt_UpgradeCode"
             xml:space="preserve"/>
-        <Button
-            Grid.Row="6"
+          <Button
             Grid.Column="2"
             Name="btn_UpgradeCode_Copy"
             Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
+          <Label
+            Grid.Column="3"
+            Name="lbl_CompressedUpgradeGUID"
+            HorizontalContentAlignment="Left"
+            Content="Compressed"/>
+          <TextBox
+            Grid.Column="4"
+            Name="txt_CompressedUpgradeGUID"
+            xml:space="preserve"/>
+          <Button
+            Grid.Column="5"
+            Name="btn_CompressedUpgradeGUID_Copy"
+            Style="{StaticResource CopyButton}"
+            Content="&#xE8C8;"/>
+        </Grid>
 
         <!-- Row -->
         <Button
-            Grid.Row="7"
+            Grid.Row="6"
             Grid.Column="0"
             Name="btn_AllProperties"
             Content="All Properties"/>
         <ListBox
-            Grid.Row="7"
+            Grid.Row="6"
             Grid.Column="1"
             Name="lsbox_FilePath"
             AllowDrop="True"
@@ -2165,7 +2197,7 @@ Add-Type -AssemblyName System.Windows.Forms
           </ListBox.Items>
         </ListBox>
         <Button
-            Grid.Row="7"
+          Grid.Row="6"
             Grid.Column="2"
             Name="btn_FilePath_Copy"
             Style="{StaticResource CopyButton}"
