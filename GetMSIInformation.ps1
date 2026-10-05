@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.8.14.0
+.VERSION 2026.10.5.0
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -50,6 +50,7 @@
 2026.8.14.0   - The right-click menu now works on any file type to get hash information, not just MSI files.
                 Fixed repeating errors when the status bar message tried to reset.
                 The window now comes to the foreground faster on the first launch in a session.
+2026.10.5.0  - Added a reload button for the current file and improved the compressed GUID labels.
 
 .PRIVATEDATA
 
@@ -82,7 +83,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.8.14.0"
+[System.Version]$Script:ScriptVersion = "2026.10.5.0"
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 # Icon Temp Folder Path
@@ -98,6 +99,8 @@ $Script:UpdateCheckHeaders = @{
 }
 # How this script was launched; drives which update action the 'Update Available' click takes.
 $Script:UpdateChannel = $null
+# File path to retry after a file-lock error.
+$Script:RetryFilePath = $null
 # Get the Security Principal
 $Script:currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 # Get PowerShell Version
@@ -126,6 +129,23 @@ function Test-FileLock {
   catch {
     return $true
   }
+}
+
+function Show-FileLockedMessage {
+  param (
+    [Parameter(Mandatory = $true)]
+    [string]$Path
+  )
+
+  $Script:RetryFilePath = $Path
+  $lsbox_FilePath.Items.Clear()
+  $lsbox_FilePath.Items.Add("ERROR: The file is locked:`n[$Path]")
+  $lsbox_FilePath.Background = [System.Windows.Media.Brushes]::Red
+  $lsbox_FilePath.Foreground = [System.Windows.Media.Brushes]::Yellow
+  $lsbox_FilePath.FontWeight = 'Bold'
+  $lsbox_FilePath.FontSize = 16
+  $btn_FilePath_Retry.Visibility = [System.Windows.Visibility]::Visible
+  $btn_FilePath_Retry.IsEnabled = $true
 }
 
 function Get-MsiProperties {
@@ -183,10 +203,10 @@ function Get-MsiProperties {
 
 # Stolen from: https://github.com/codaamok
 # https://gist.github.com/codaamok/7ed30d01280ce28bb451621966707c1b
-function Convert-ProductCodeToCompressedGuid {
+function Convert-GuidToCompressedGuid {
   param(
     [Parameter(Mandatory = $true)]
-    [string]$ProductCode
+    [string]$Guid
   )
 
   function Get-ReversedString ([array]$a) {
@@ -198,13 +218,13 @@ function Convert-ProductCodeToCompressedGuid {
   }
 
   # Strip braces and dashes from the GUID
-  $ProductCode = $ProductCode -replace '\{|\}|\-'
+  $Guid = $Guid -replace '\{|\}|\-'
 
-  $data1 = Get-ReversedString $ProductCode[0..7]
-  $data2 = Get-ReversedString $ProductCode[8..11]
-  $data3 = Get-ReversedString $ProductCode[12..15]
-  $data4 = Get-ReversedBytes ($ProductCode[16..19] -join '')
-  $data5 = Get-ReversedBytes ($ProductCode[20..31] -join '')
+  $data1 = Get-ReversedString $Guid[0..7]
+  $data2 = Get-ReversedString $Guid[8..11]
+  $data3 = Get-ReversedString $Guid[12..15]
+  $data4 = Get-ReversedBytes ($Guid[16..19] -join '')
+  $data5 = Get-ReversedBytes ($Guid[20..31] -join '')
 
   return '{0}{1}{2}{3}{4}' -f $data1, $data2, $data3, $data4, $data5
 }
@@ -406,9 +426,12 @@ function Set-TextboxInformation {
     $txt_ProductCode.Text = $MSIPropertiesInfo.ProductCode
     $txt_UpgradeCode.Text = $MSIPropertiesInfo.UpgradeCode
 
-    # Set the Compressed GUID from the Product Code
+    # Set the compressed GUIDs from the Product and Upgrade Codes
     if ($MSIPropertiesInfo.ProductCode) {
-      $txt_CompressedGUID.Text = Convert-ProductCodeToCompressedGuid -ProductCode $MSIPropertiesInfo.ProductCode
+      $txt_CompressedGUID.Text = Convert-GuidToCompressedGuid -Guid $MSIPropertiesInfo.ProductCode
+    }
+    if ($MSIPropertiesInfo.UpgradeCode) {
+      $txt_CompressedUpgradeGUID.Text = Convert-GuidToCompressedGuid -Guid $MSIPropertiesInfo.UpgradeCode
     }
   }
 
@@ -617,6 +640,8 @@ function Invoke-FormReset {
 
   # Forget the loaded MSI so a relaunch (update) doesn't pass a stale path
   $Script:LoadedMSIPath = $null
+  $Script:RetryFilePath = $null
+  $btn_FilePath_Retry.Visibility = [System.Windows.Visibility]::Collapsed
 
   # Disable all buttons
   Disable-AllButtons
@@ -669,6 +694,8 @@ function Invoke-GetMSIInformation {
 
   # Remember the loaded file so an update relaunch can reopen it
   $Script:LoadedMSIPath = $MSIPath[0].FullName
+  $Script:RetryFilePath = $MSIPath[0].FullName
+  $btn_FilePath_Retry.Visibility = [System.Windows.Visibility]::Visible
 
   # Remove lock on current file
   [System.GC]::Collect()
@@ -1090,7 +1117,7 @@ Add-Type -AssemblyName System.Windows.Forms
   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   Name="form1"
-  Width="920"
+  Width="980"
   Height="620"
   ResizeMode="NoResize"
   WindowStyle="None"
@@ -2003,7 +2030,6 @@ Add-Type -AssemblyName System.Windows.Forms
             <RowDefinition Height="36"/>
             <RowDefinition Height="36"/>
             <RowDefinition Height="36"/>
-            <RowDefinition Height="36"/>
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
           <Grid.ColumnDefinitions>
@@ -2080,92 +2106,138 @@ Add-Type -AssemblyName System.Windows.Forms
             Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
 
-        <!-- Row -->
-        <Label
-            Grid.Row="4"
+        <!-- Product Code and its compressed GUID share a row -->
+        <Grid
+          Grid.Row="4"
+          Grid.Column="0"
+          Grid.ColumnSpan="3">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="110"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="60"/>
+            <ColumnDefinition Width="85"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="60"/>
+          </Grid.ColumnDefinitions>
+          <Label
             Grid.Column="0"
             Name="lbl_ProductCode"
             Content="Product Code"/>
-        <TextBox
-            Grid.Row="4"
+          <TextBox
             Grid.Column="1"
             Name="txt_ProductCode"
             xml:space="preserve"/>
-        <Button
-            Grid.Row="4"
+          <Button
             Grid.Column="2"
             Name="btn_ProductCode_Copy"
             Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
-
-        <!-- Row -->
-        <Label
-            Grid.Row="5"
-            Grid.Column="0"
+          <Label
+            Grid.Column="3"
             Name="lbl_CompressedGUID"
-            Content="Comp Prod Code"/>
-        <TextBox
-            Grid.Row="5"
-            Grid.Column="1"
+            HorizontalContentAlignment="Left"
+            Content="Compressed"/>
+          <TextBox
+            Grid.Column="4"
             Name="txt_CompressedGUID"
             xml:space="preserve"/>
-        <Button
-            Grid.Row="5"
-            Grid.Column="2"
+          <Button
+            Grid.Column="5"
             Name="btn_CompressedGUID_Copy"
             Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
+        </Grid>
 
-        <!-- Row -->
-        <Label
-            Grid.Row="6"
+        <!-- Upgrade Code and its compressed GUID share a row -->
+        <Grid
+          Grid.Row="5"
+          Grid.Column="0"
+          Grid.ColumnSpan="3">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="110"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="60"/>
+            <ColumnDefinition Width="85"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="60"/>
+          </Grid.ColumnDefinitions>
+          <Label
             Grid.Column="0"
             Name="lbl_UpgradeCode"
             Content="Upgrade Code"/>
-        <TextBox
-            Grid.Row="6"
+          <TextBox
             Grid.Column="1"
             Name="txt_UpgradeCode"
             xml:space="preserve"/>
-        <Button
-            Grid.Row="6"
+          <Button
             Grid.Column="2"
             Name="btn_UpgradeCode_Copy"
             Style="{StaticResource CopyButton}"
             Content="&#xE8C8;"/>
+          <Label
+            Grid.Column="3"
+            Name="lbl_CompressedUpgradeGUID"
+            HorizontalContentAlignment="Left"
+            Content="Compressed"/>
+          <TextBox
+            Grid.Column="4"
+            Name="txt_CompressedUpgradeGUID"
+            xml:space="preserve"/>
+          <Button
+            Grid.Column="5"
+            Name="btn_CompressedUpgradeGUID_Copy"
+            Style="{StaticResource CopyButton}"
+            Content="&#xE8C8;"/>
+        </Grid>
 
         <!-- Row -->
         <Button
-            Grid.Row="7"
+            Grid.Row="6"
             Grid.Column="0"
             Name="btn_AllProperties"
             Content="All Properties"/>
-        <ListBox
-            Grid.Row="7"
-            Grid.Column="1"
-            Name="lsbox_FilePath"
-            AllowDrop="True"
-            TabIndex="0">
-          <ListBox.Items>
-            <ListBoxItem>
-              <StackPanel Orientation="Horizontal"
-                    HorizontalAlignment="Center">
-                <TextBlock Text="&#xE896;"
-                      FontFamily="Segoe MDL2 Assets"
-                      FontSize="18"
-                      VerticalAlignment="Center"
-                      Foreground="{StaticResource TextMuted}"
-                      Margin="0,0,8,0"/>
-                <TextBlock VerticalAlignment="Center"
-                      Foreground="{StaticResource TextMuted}"
-                      FontStyle="Italic"
-                      Text="Drop a file here · hashes for any file, properties for *.msi"/>
-              </StackPanel>
-            </ListBoxItem>
-          </ListBox.Items>
-        </ListBox>
+        <Grid
+          Grid.Row="6"
+          Grid.Column="1">
+          <ListBox
+              Name="lsbox_FilePath"
+              AllowDrop="True"
+              TabIndex="0">
+            <ListBox.Items>
+              <ListBoxItem>
+                <StackPanel Orientation="Horizontal"
+                      HorizontalAlignment="Center">
+                  <TextBlock Text="&#xE896;"
+                        FontFamily="Segoe MDL2 Assets"
+                        FontSize="18"
+                        VerticalAlignment="Center"
+                        Foreground="{StaticResource TextMuted}"
+                        Margin="0,0,8,0"/>
+                  <TextBlock VerticalAlignment="Center"
+                        Foreground="{StaticResource TextMuted}"
+                        FontStyle="Italic"
+                        Text="Drop a file here · hashes for any file, properties for *.msi"/>
+                </StackPanel>
+              </ListBoxItem>
+            </ListBox.Items>
+          </ListBox>
+          <Button
+            Name="btn_FilePath_Retry"
+            Style="{StaticResource CopyButton}"
+            Content="&#xE72C;"
+            ToolTip="Reload this file"
+            BorderBrush="{StaticResource Accent}"
+            BorderThickness="2"
+            Visibility="Collapsed"
+            Width="38"
+            Height="36"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Margin="0,8,8,0"
+            Panel.ZIndex="1"/>
+        </Grid>
         <Button
-            Grid.Row="7"
+            Grid.Row="6"
             Grid.Column="2"
             Name="btn_FilePath_Copy"
             Style="{StaticResource CopyButton}"
@@ -2243,18 +2315,7 @@ $formMSIProperties.Add_Loaded({
       # Check if $FilePath is locked
       if (Test-FileLock -Path $FilePath) {
         Write-Warning "The file is locked: [$FilePath]"
-
-        # Clear the listbox
-        $lsbox_FilePath.Items.Clear()
-
-        # Add an error message to the listbox
-        $lsbox_FilePath.Items.Add("ERROR: The file is locked:`n[$FilePath]")
-        
-        # Make the Error message bold, red and yellow
-        $lsbox_FilePath.Background = [System.Windows.Media.Brushes]::Red
-        $lsbox_FilePath.Foreground = [System.Windows.Media.Brushes]::Yellow
-        $lsbox_FilePath.FontWeight = 'Bold'
-        $lsbox_FilePath.FontSize = 16
+        Show-FileLockedMessage -Path $FilePath
       }
       else {
         Write-Host "FilePath passed: [$FilePath]"
@@ -2282,18 +2343,7 @@ $lsbox_FilePath.Add_Drop({
       # Check if the dropped file is locked
       if (Test-FileLock -Path "$($Script:DroppedFilePath)") {
         Write-Warning "The file is locked: [$Script:DroppedFilePath]"
-  
-        # Clear the listbox
-        $lsbox_FilePath.Items.Clear()
-  
-        # Add an error message to the listbox
-        $lsbox_FilePath.Items.Add("ERROR: The file is locked:`n[$Script:DroppedFilePath]")
-          
-        # Make the Error message bold, red and yellow
-        $lsbox_FilePath.Background = [System.Windows.Media.Brushes]::Red
-        $lsbox_FilePath.Foreground = [System.Windows.Media.Brushes]::Yellow
-        $lsbox_FilePath.FontWeight = 'Bold'
-        $lsbox_FilePath.FontSize = 16
+        Show-FileLockedMessage -Path "$($Script:DroppedFilePath)"
       }
       else {
         # Reset listbox
@@ -2306,6 +2356,26 @@ $lsbox_FilePath.Add_Drop({
           }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
       }
     }
+  })
+
+$btn_FilePath_Retry.add_Click({
+    $retryPath = $Script:RetryFilePath
+    if ([string]::IsNullOrWhiteSpace($retryPath)) {
+      return
+    }
+
+    if (Test-FileLock -Path $retryPath) {
+      Show-FileLockedMessage -Path $retryPath
+      Set-StatusMessage -Message 'File is still locked. Close the application using it, then retry.' -Type Danger
+      return
+    }
+
+    $btn_FilePath_Retry.Visibility = [System.Windows.Visibility]::Collapsed
+    $lsbox_FilePath.Items.Clear()
+    $lsbox_FilePath.Items.Add("Loading: [$retryPath]")
+    $formMSIProperties.Dispatcher.InvokeAsync({
+        Invoke-GetMSIInformation -MSIPath $Script:RetryFilePath
+      }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
   })
 
 $lsbox_FilePath.Add_DragOver({
