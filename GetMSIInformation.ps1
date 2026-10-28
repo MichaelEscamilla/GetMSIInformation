@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.10.5.0
+.VERSION 2026.10.27.0
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -51,6 +51,7 @@
                 Fixed repeating errors when the status bar message tried to reset.
                 The window now comes to the foreground faster on the first launch in a session.
 2026.10.5.0  - Added a reload button for the current file and improved the compressed GUID labels.
+2026.10.27.0 - The Upgrade Code label is now clickable and opens a window showing the MSI's full Upgrade table.
 
 .PRIVATEDATA
 
@@ -83,7 +84,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.10.5.0"
+[System.Version]$Script:ScriptVersion = "2026.10.27.0"
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 # Icon Temp Folder Path
@@ -201,6 +202,68 @@ function Get-MsiProperties {
   $Properties
 }
 
+function Get-MsiUpgradeTable {
+  param (
+    [Parameter(Mandatory = $true)]
+    [IO.FileInfo[]]$Path
+  )
+
+  Write-Host "Getting MSI Upgrade Table for: [$Path]"
+
+  # Check if the MSI file path exists
+  if (-not (Test-Path $Path)) {
+    throw "The file $Path does not exist."
+  }
+
+  # Create a new Windows Installer COM object
+  $WindowsInstaller = New-Object -ComObject WindowsInstaller.Installer
+
+  # Open the MSI database in read-only mode
+  $MSIDatabase = $WindowsInstaller.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $WindowsInstaller, @($Path.FullName, 0))
+
+  # Start building the list of Upgrade entries
+  [Collections.Generic.List[PSCustomObject]]$UpgradeEntries = @()
+
+  # Confirm the Upgrade table exists before querying it (not every MSI has one)
+  $TableView = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT Name FROM _Tables WHERE Name='Upgrade'"))
+  $TableView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $TableView, $null) | Out-Null
+  $TableExists = $TableView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $TableView, $null)
+  $TableView.GetType().InvokeMember("Close", "InvokeMethod", $null, $TableView, $null) | Out-Null
+
+  if ($TableExists) {
+    # Open a view on the Upgrade table
+    $UpgradeView = $MSIDatabase.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $MSIDatabase, @("SELECT UpgradeCode,VersionMin,VersionMax,Language,Attributes,Remove,ActionProperty FROM Upgrade"))
+
+    # Execute the view query
+    $UpgradeView.GetType().InvokeMember("Execute", "InvokeMethod", $null, $UpgradeView, $null) | Out-Null
+
+    # Fetch the first record from the result set
+    $UpgradeRecord = $UpgradeView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $UpgradeView, $null)
+
+    # Loop through all records in the result set
+    while ($null -ne $UpgradeRecord) {
+      $UpgradeEntries.Add([PSCustomObject]@{
+          UpgradeCode    = $UpgradeRecord.GetType().InvokeMember("StringData", "GetProperty", $null, $UpgradeRecord, @(1))
+          VersionMin     = $UpgradeRecord.GetType().InvokeMember("StringData", "GetProperty", $null, $UpgradeRecord, @(2))
+          VersionMax     = $UpgradeRecord.GetType().InvokeMember("StringData", "GetProperty", $null, $UpgradeRecord, @(3))
+          Language       = $UpgradeRecord.GetType().InvokeMember("StringData", "GetProperty", $null, $UpgradeRecord, @(4))
+          Attributes     = $UpgradeRecord.GetType().InvokeMember("StringData", "GetProperty", $null, $UpgradeRecord, @(5))
+          Remove         = $UpgradeRecord.GetType().InvokeMember("StringData", "GetProperty", $null, $UpgradeRecord, @(6))
+          ActionProperty = $UpgradeRecord.GetType().InvokeMember("StringData", "GetProperty", $null, $UpgradeRecord, @(7))
+        })
+
+      # Fetch the next record from the result set
+      $UpgradeRecord = $UpgradeView.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $UpgradeView, $null)
+    }
+
+    # Close the Upgrade view
+    $UpgradeView.GetType().InvokeMember("Close", "InvokeMethod", $null, $UpgradeView, $null) | Out-Null
+  }
+
+  # Return the list of Upgrade entries
+  $UpgradeEntries
+}
+
 # Stolen from: https://github.com/codaamok
 # https://gist.github.com/codaamok/7ed30d01280ce28bb451621966707c1b
 function Convert-GuidToCompressedGuid {
@@ -261,6 +324,27 @@ function Clear-Textboxes {
   foreach ($Textbox in $Textboxes) {
     # Clear textbox
     $Textbox.Clear()
+  }
+
+  # Reset the Upgrade Code label back to its non-clickable look
+  Set-UpgradeCodeLabelClickable -Enabled $false
+}
+
+function Set-UpgradeCodeLabelClickable {
+  param (
+    [Parameter(Mandatory = $true)]
+    [bool]$Enabled
+  )
+
+  if ($Enabled) {
+    $lbl_UpgradeCode.Foreground = $formMSIProperties.FindResource("Accent")
+    $lbl_UpgradeCode.Cursor = [System.Windows.Input.Cursors]::Hand
+    $lbl_UpgradeCode.ToolTip = "Click to view the MSI Upgrade table"
+  }
+  else {
+    $lbl_UpgradeCode.Foreground = $formMSIProperties.FindResource("TextMuted")
+    $lbl_UpgradeCode.Cursor = [System.Windows.Input.Cursors]::Arrow
+    $lbl_UpgradeCode.ToolTip = $null
   }
 }
 
@@ -435,12 +519,199 @@ function Set-TextboxInformation {
     }
   }
 
+  # Toggle the clickable look of the Upgrade Code label based on whether a code is present
+  Set-UpgradeCodeLabelClickable -Enabled ([bool]$MSIPropertiesInfo.UpgradeCode)
+
   # Set the File Hash Information textboxes
   $txt_MD5.Text = $FileHashInfo.MD5.Hash
   $txt_SHA1.Text = $FileHashInfo.SHA1.Hash
   $txt_SHA256.Text = $FileHashInfo.SHA256.Hash
   $txt_Digest.Text = $FileHashInfo.Digest
   $txt_D256.Text = $FileHashInfo.D256
+}
+
+function Show-UpgradeCodeDetails {
+  # Nothing to show without a loaded MSI
+  if (-not $Script:LoadedMSIPath) {
+    return
+  }
+
+  # Read the Upgrade table from the currently loaded MSI
+  try {
+    $UpgradeEntries = Get-MsiUpgradeTable -Path $Script:LoadedMSIPath
+  }
+  catch {
+    Write-Host "Error reading Upgrade table: $_"
+    $UpgradeEntries = @()
+  }
+
+  # Themed popup window (self-contained palette so it matches the main window)
+  [xml]$XAMLUpgrade = @"
+<Window
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  Width="1160"
+  Height="360"
+  ResizeMode="NoResize"
+  WindowStyle="None"
+  AllowsTransparency="True"
+  Background="Transparent"
+  Title="Upgrade Table"
+  FontFamily="Segoe UI"
+  FontSize="14"
+  ShowInTaskbar="False">
+  <Window.Resources>
+    <SolidColorBrush x:Key="Bg" Color="#292524"/>
+    <SolidColorBrush x:Key="Surface" Color="#1C1917"/>
+    <SolidColorBrush x:Key="Surface2" Color="#44403C"/>
+    <SolidColorBrush x:Key="Border" Color="#3A3633"/>
+    <SolidColorBrush x:Key="BorderMuted" Color="#57534E"/>
+    <SolidColorBrush x:Key="Text" Color="#F5F5F4"/>
+    <SolidColorBrush x:Key="TextMuted" Color="#A8A29E"/>
+    <SolidColorBrush x:Key="Accent" Color="#FB923C"/>
+    <SolidColorBrush x:Key="Danger" Color="#EF4444"/>
+
+    <Style x:Key="TitleBarCloseButton" TargetType="Button">
+      <Setter Property="Width" Value="42"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="0,11,0,0">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Danger}"/>
+                <Setter Property="Foreground" Value="#FFFFFF"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="DataGridColumnHeader">
+      <Setter Property="Background" Value="{StaticResource Surface2}"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+      <Setter Property="BorderThickness" Value="0,0,1,1"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    </Style>
+    <Style TargetType="DataGridCell">
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="10,5"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="DataGridCell">
+            <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+              <ContentPresenter VerticalAlignment="Center"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="{StaticResource Accent}"/>
+          <Setter Property="Foreground" Value="#1C1917"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+    <Style TargetType="DataGridRow">
+      <Setter Property="Background" Value="{StaticResource Surface}"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+    </Style>
+  </Window.Resources>
+
+  <Border Background="{StaticResource Bg}" CornerRadius="12" BorderBrush="{StaticResource BorderMuted}" BorderThickness="1">
+    <DockPanel>
+      <Border Name="titlebar" DockPanel.Dock="Top" Background="{StaticResource Surface}" CornerRadius="11,11,0,0" Height="42">
+        <DockPanel LastChildFill="False">
+          <Button Name="titlebar_Close" DockPanel.Dock="Right" Style="{StaticResource TitleBarCloseButton}" Content="&#xE8BB;"/>
+          <TextBlock DockPanel.Dock="Left" Margin="16,0,0,0" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Text}" Text="Upgrade Table" VerticalAlignment="Center"/>
+        </DockPanel>
+      </Border>
+      <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}" Height="24" CornerRadius="0,0,11,11">
+        <TextBlock Name="txtblk_UpgradeStatus" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" FontSize="12" Margin="12,0"/>
+      </Border>
+      <Grid Margin="12">
+        <DataGrid Name="dg_Upgrade"
+            AutoGenerateColumns="False"
+            IsReadOnly="True"
+            HeadersVisibility="Column"
+            CanUserResizeRows="False"
+            CanUserAddRows="False"
+            SelectionMode="Single"
+            GridLinesVisibility="Horizontal"
+            HorizontalGridLinesBrush="{StaticResource Border}"
+            Background="{StaticResource Surface}"
+            BorderBrush="{StaticResource Border}"
+            BorderThickness="1"
+            RowBackground="{StaticResource Surface}"
+            Foreground="{StaticResource Text}">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="UpgradeCode" Binding="{Binding UpgradeCode}" Width="290"/>
+            <DataGridTextColumn Header="VersionMin" Binding="{Binding VersionMin}" Width="110"/>
+            <DataGridTextColumn Header="VersionMax" Binding="{Binding VersionMax}" Width="110"/>
+            <DataGridTextColumn Header="Language" Binding="{Binding Language}" Width="95"/>
+            <DataGridTextColumn Header="Attributes" Binding="{Binding Attributes}" Width="90"/>
+            <DataGridTextColumn Header="Remove" Binding="{Binding Remove}" Width="*"/>
+            <DataGridTextColumn Header="ActionProperty" Binding="{Binding ActionProperty}" Width="2*"/>
+          </DataGrid.Columns>
+        </DataGrid>
+        <TextBlock Name="txtblk_NoUpgrade"
+            Visibility="Collapsed"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Foreground="{StaticResource TextMuted}"
+            FontSize="15"
+            Text="This MSI does not contain an Upgrade table."/>
+      </Grid>
+    </DockPanel>
+  </Border>
+</Window>
+"@
+
+  # Load the popup window
+  $ReaderUpgrade = New-Object System.Xml.XmlNodeReader $XAMLUpgrade
+  [System.Windows.Window]$UpgradeWindow = [Windows.Markup.XamlReader]::Load($ReaderUpgrade)
+
+  # Grab named controls
+  $dg_Upgrade = $UpgradeWindow.FindName("dg_Upgrade")
+  $txtblk_NoUpgrade = $UpgradeWindow.FindName("txtblk_NoUpgrade")
+  $txtblk_UpgradeStatus = $UpgradeWindow.FindName("txtblk_UpgradeStatus")
+  $titlebar = $UpgradeWindow.FindName("titlebar")
+  $titlebar_Close = $UpgradeWindow.FindName("titlebar_Close")
+
+  # Populate the grid, or show the empty-state message
+  if ($UpgradeEntries -and $UpgradeEntries.Count -gt 0) {
+    $dg_Upgrade.ItemsSource = @($UpgradeEntries)
+    $rowText = if ($UpgradeEntries.Count -eq 1) { "entry" } else { "entries" }
+    $txtblk_UpgradeStatus.Text = "$($UpgradeEntries.Count) Upgrade $rowText"
+  }
+  else {
+    $dg_Upgrade.Visibility = [System.Windows.Visibility]::Collapsed
+    $txtblk_NoUpgrade.Visibility = [System.Windows.Visibility]::Visible
+    $txtblk_UpgradeStatus.Text = "No Upgrade table found"
+  }
+
+  # Window chrome behavior
+  $titlebar.Add_MouseLeftButtonDown({ try { $UpgradeWindow.DragMove() } catch { } })
+  $titlebar_Close.Add_Click({ $UpgradeWindow.Close() })
+
+  # Center on the owner window and show modally
+  $UpgradeWindow.Owner = $formMSIProperties
+  $UpgradeWindow.WindowStartupLocation = "CenterOwner"
+  $UpgradeWindow.Icon = $formMSIProperties.Icon
+  $UpgradeWindow.ShowDialog() | Out-Null
 }
 
 function Build-IconImageControls {
@@ -2164,6 +2435,7 @@ Add-Type -AssemblyName System.Windows.Forms
           <Label
             Grid.Column="0"
             Name="lbl_UpgradeCode"
+            Background="Transparent"
             Content="Upgrade Code"/>
           <TextBox
             Grid.Column="1"
@@ -2551,6 +2823,14 @@ $titlebar_Close.add_Click({
 $btn_AllProperties.add_Click({
     $SelectedProperty = Get-MsiProperties -Path $lsbox_FilePath.Items[0] | Out-GridView -Title "MSI Database Properties for $($lsbox_FilePath.Items[0])" -OutputMode Single
     $SelectedProperty.Value | Set-Clipboard
+  })
+
+#### Label Handlers ####
+$lbl_UpgradeCode.add_MouseLeftButtonUp({
+    # Only react when an Upgrade Code is loaded (label is in its clickable state)
+    if ($txt_UpgradeCode.Text) {
+      Show-UpgradeCodeDetails
+    }
   })
 
 $Button_Copy_Handler = {
