@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.10.28.0
+.VERSION 2026.10.30.0
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -53,6 +53,7 @@
 2026.10.5.0  - Added a reload button for the current file and improved the compressed GUID labels.
 2026.10.27.0 - The Upgrade Code label is now clickable and opens a window showing the MSI's full Upgrade table.
 2026.10.28.0 - Added a Package Code row to the MSI properties, read from the Summary Information stream.
+2026.10.30.0 - Widened the Upgrade table columns so the full Upgrade Code GUID is no longer truncated.
 
 .PRIVATEDATA
 
@@ -85,7 +86,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.10.28.0"
+[System.Version]$Script:ScriptVersion = "2026.10.30.0"
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 # Icon Temp Folder Path
@@ -561,7 +562,7 @@ function Show-UpgradeCodeDetails {
 <Window
   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-  Width="1160"
+  Width="1200"
   Height="360"
   ResizeMode="NoResize"
   WindowStyle="None"
@@ -669,7 +670,7 @@ function Show-UpgradeCodeDetails {
             RowBackground="{StaticResource Surface}"
             Foreground="{StaticResource Text}">
           <DataGrid.Columns>
-            <DataGridTextColumn Header="UpgradeCode" Binding="{Binding UpgradeCode}" Width="290"/>
+            <DataGridTextColumn Header="UpgradeCode" Binding="{Binding UpgradeCode}" Width="330"/>
             <DataGridTextColumn Header="VersionMin" Binding="{Binding VersionMin}" Width="110"/>
             <DataGridTextColumn Header="VersionMax" Binding="{Binding VersionMax}" Width="110"/>
             <DataGridTextColumn Header="Language" Binding="{Binding Language}" Width="95"/>
