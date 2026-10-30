@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 2026.10.27.0
+.VERSION 2026.10.28.0
 
 .GUID 3a7b9c4d-2e8f-4a1b-9d6c-5e3f7a8b9c2d
 
@@ -52,6 +52,7 @@
                 The window now comes to the foreground faster on the first launch in a session.
 2026.10.5.0  - Added a reload button for the current file and improved the compressed GUID labels.
 2026.10.27.0 - The Upgrade Code label is now clickable and opens a window showing the MSI's full Upgrade table.
+2026.10.28.0 - Added a Package Code row to the MSI properties, read from the Summary Information stream.
 
 .PRIVATEDATA
 
@@ -84,7 +85,7 @@ param (
 # Script Name
 $Script:ScriptName = "GetMSIInformation.ps1"
 # Script Version
-[System.Version]$Script:ScriptVersion = "2026.10.27.0"
+[System.Version]$Script:ScriptVersion = "2026.10.28.0"
 $Script:RightClickMenuName = "Get MSI Information"
 $Script:RightClickMenuFolderPath = "$env:LOCALAPPDATA\GetMSIInformation"
 # Icon Temp Folder Path
@@ -197,6 +198,15 @@ function Get-MsiProperties {
 
   # Close the Property view
   $MSIPropertyView.GetType().InvokeMember("Close", "InvokeMethod", $null, $MSIPropertyView, $null) | Out-Null
+
+  # The Package Code lives in the Summary Information stream (Revision Number, PID 9), not the Property table
+  try {
+    $SummaryInfo = $WindowsInstaller.GetType().InvokeMember("SummaryInformation", "GetProperty", $null, $WindowsInstaller, @($Path.FullName, 0))
+    $Properties["PackageCode"] = $SummaryInfo.GetType().InvokeMember("Property", "GetProperty", $null, $SummaryInfo, @(9))
+  }
+  catch {
+    Write-Verbose "Error retrieving Package Code: $_"
+  }
 	
   # Return the System Object of properties
   $Properties
@@ -509,6 +519,7 @@ function Set-TextboxInformation {
     $txt_ProductVersion.Text = $MSIPropertiesInfo.ProductVersion
     $txt_ProductCode.Text = $MSIPropertiesInfo.ProductCode
     $txt_UpgradeCode.Text = $MSIPropertiesInfo.UpgradeCode
+    $txt_PackageCode.Text = $MSIPropertiesInfo.PackageCode
 
     # Set the compressed GUIDs from the Product and Upgrade Codes
     if ($MSIPropertiesInfo.ProductCode) {
@@ -1389,7 +1400,7 @@ Add-Type -AssemblyName System.Windows.Forms
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   Name="form1"
   Width="980"
-  Height="620"
+  Height="656"
   ResizeMode="NoResize"
   WindowStyle="None"
   AllowsTransparency="True"
@@ -2301,6 +2312,7 @@ Add-Type -AssemblyName System.Windows.Forms
             <RowDefinition Height="36"/>
             <RowDefinition Height="36"/>
             <RowDefinition Height="36"/>
+            <RowDefinition Height="36"/>
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
           <Grid.ColumnDefinitions>
@@ -2463,13 +2475,31 @@ Add-Type -AssemblyName System.Windows.Forms
         </Grid>
 
         <!-- Row -->
+        <Label
+            Grid.Row="6"
+            Grid.Column="0"
+            Name="lbl_PackageCode"
+            Content="Package Code"/>
+        <TextBox
+            Grid.Row="6"
+            Grid.Column="1"
+            Name="txt_PackageCode"
+            xml:space="preserve"/>
         <Button
             Grid.Row="6"
+            Grid.Column="2"
+            Name="btn_PackageCode_Copy"
+            Style="{StaticResource CopyButton}"
+            Content="&#xE8C8;"/>
+
+        <!-- Row -->
+        <Button
+            Grid.Row="7"
             Grid.Column="0"
             Name="btn_AllProperties"
             Content="All Properties"/>
         <Grid
-          Grid.Row="6"
+          Grid.Row="7"
           Grid.Column="1">
           <ListBox
               Name="lsbox_FilePath"
@@ -2509,7 +2539,7 @@ Add-Type -AssemblyName System.Windows.Forms
             Panel.ZIndex="1"/>
         </Grid>
         <Button
-            Grid.Row="6"
+            Grid.Row="7"
             Grid.Column="2"
             Name="btn_FilePath_Copy"
             Style="{StaticResource CopyButton}"
